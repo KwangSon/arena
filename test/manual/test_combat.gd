@@ -714,6 +714,28 @@ func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 	character.add_child(synchronizer, true)
 
 
+func _setup_projectile_synchronizer(projectile: Node2D) -> void:
+	var synchronizer: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
+	synchronizer.name = "StateSynchronizer"
+	synchronizer.root_path = NodePath("..")
+	synchronizer.replication_interval = 0.0
+	synchronizer.delta_interval = 0.0
+	synchronizer.set_multiplayer_authority(REFEREE_PEER_ID)
+
+	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
+
+	var pos_path := NodePath(".:position")
+	replication_config.add_property(pos_path)
+	replication_config.property_set_spawn(pos_path, true)
+	replication_config.property_set_replication_mode(
+		pos_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+
+	synchronizer.replication_config = replication_config
+
+	projectile.add_child(synchronizer, true)
+
+
 func _spawn_character_node(data: Variant) -> Node:
 	assert(data is Dictionary, "TestCombat: spawn data must be a Dictionary")
 
