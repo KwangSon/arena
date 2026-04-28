@@ -10,7 +10,10 @@ func test_character_base_moves_only_for_multiplayer_authority() -> void:
 	var authority_character: CharacterBase = autofree(CHARACTER_BASE_SCRIPT.new())
 	root.add_child(authority_character)
 	authority_character.set_multiplayer_authority(1)
-	assert_true(authority_character.is_multiplayer_authority(), "Peer 1 should be local authority in offline tests")
+	assert_true(
+		authority_character.is_multiplayer_authority(),
+		"Peer 1 should be local authority in offline tests"
+	)
 	authority_character.set_move_input(Vector2.RIGHT)
 
 	authority_character._physics_process(0.0)
@@ -20,7 +23,10 @@ func test_character_base_moves_only_for_multiplayer_authority() -> void:
 	var remote_character: CharacterBase = autofree(CHARACTER_BASE_SCRIPT.new())
 	root.add_child(remote_character)
 	remote_character.set_multiplayer_authority(2)
-	assert_false(remote_character.is_multiplayer_authority(), "Peer 2 should not be local authority in offline tests")
+	assert_false(
+		remote_character.is_multiplayer_authority(),
+		"Peer 2 should not be local authority in offline tests"
+	)
 	remote_character.set_move_input(Vector2.LEFT)
 
 	remote_character._physics_process(0.0)
@@ -60,7 +66,9 @@ func test_setup_character_synchronizer_replicates_position() -> void:
 
 	combat.call("_setup_character_synchronizer", character)
 
-	var synchronizer: MultiplayerSynchronizer = character.get_node("StateSynchronizer") as MultiplayerSynchronizer
+	var synchronizer: MultiplayerSynchronizer = (
+		character.get_node("StateSynchronizer") as MultiplayerSynchronizer
+	)
 	assert_not_null(synchronizer, "StateSynchronizer should be added to each spawned character")
 	assert_eq(synchronizer.root_path, NodePath(".."))
 	assert_eq(synchronizer.get_multiplayer_authority(), 1)
@@ -72,4 +80,39 @@ func test_setup_character_synchronizer_replicates_position() -> void:
 	assert_eq(
 		config.property_get_replication_mode(NodePath(".:position")),
 		SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+
+
+func test_mark_peer_disconnected_stops_character_and_starts_grace_period() -> void:
+	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
+	autofree(combat)
+
+	var character_container: Node2D = autofree(Node2D.new())
+	combat.set("_character_container", character_container)
+	combat.add_child(character_container)
+
+	var character: CharacterBase = autofree(CHARACTER_BASE_SCRIPT.new())
+	character.name = "2"
+	character.set_move_input(Vector2.RIGHT)
+	character_container.add_child(character)
+
+	combat.set("_move_inputs_by_peer_id", {2: Vector2.RIGHT})
+
+	combat.call("_mark_peer_disconnected", 2)
+
+	var deadlines: Dictionary = combat.get("_disconnect_deadlines_by_peer_id")
+	var inputs: Dictionary = combat.get("_move_inputs_by_peer_id")
+	assert_true(deadlines.has(2), "Disconnect grace period should start for the disconnected peer")
+	assert_false(inputs.has(2), "Disconnected peer input should be cleared immediately")
+	assert_eq(character.get("_move_input"), Vector2.ZERO)
+
+
+func test_broadcast_match_ended_marks_match_as_finished() -> void:
+	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
+	autofree(combat)
+
+	combat.call("broadcast_match_ended", "disconnect timeout after 10.0 seconds", 2, 3)
+
+	assert_true(
+		combat.get("_match_ended"), "Match should be marked as ended after disconnect timeout"
 	)

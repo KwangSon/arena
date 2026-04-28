@@ -25,9 +25,12 @@ const MAX_CLIENTS: int = 4
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 const REFEREE_PEER_ID: int = 1
+const DISCONNECT_GRACE_PERIOD_SEC: float = 10.0
 
 # Network
 var _is_server: bool = false
+var _match_ended: bool = false
+var _ignore_next_server_disconnect: bool = false
 
 # Spawner
 var _spawner: MultiplayerSpawner
@@ -35,6 +38,7 @@ var _character_container: Node2D
 var _camera: Camera2D
 var _local_character: CharacterBase
 var _move_inputs_by_peer_id: Dictionary = {}
+var _disconnect_deadlines_by_peer_id: Dictionary = {}
 var _last_sent_move_input: Vector2 = Vector2.ZERO
 var _has_sent_move_input: bool = false
 
@@ -43,6 +47,8 @@ var _canvas: CanvasLayer
 var _info_panel: PanelContainer
 var _info_label: Label
 var _ping_button: Button
+var _disconnect_button: Button
+var _reconnect_button: Button
 var _ping_log: RichTextLabel
 var _player_hud: Control
 
@@ -56,6 +62,8 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	if _match_ended:
+		return
 	if _is_server:
 		return
 	if _camera == null:
@@ -70,8 +78,12 @@ func _process(_delta: float) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if _match_ended:
+		return
+
 	if _is_server:
 		_apply_referee_movement()
+		_process_disconnect_grace_timeouts()
 		return
 
 	_submit_local_move_input()
@@ -105,6 +117,7 @@ func _setup_network() -> void:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 	print(
 		(
@@ -123,6 +136,12 @@ func _on_peer_connected(id: int) -> void:
 
 	# Server spawns a character for the new peer
 	if _is_server:
+		if _disconnect_deadlines_by_peer_id.has(id):
+			_disconnect_deadlines_by_peer_id.erase(id)
+			_move_inputs_by_peer_id[id] = Vector2.ZERO
+			print("[Network] Peer %d reconnected within grace period" % id)
+			_update_info()
+			return
 		_spawn_character(id)
 
 	_update_info()
@@ -131,9 +150,8 @@ func _on_peer_connected(id: int) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	print("[Network] Peer disconnected: %d" % id)
 
-	# Server removes the character for the disconnected peer
 	if _is_server:
-		_remove_character(id)
+		_mark_peer_disconnected(id)
 
 	_update_info()
 
@@ -147,6 +165,18 @@ func _on_connected_to_server() -> void:
 func _on_connection_failed() -> void:
 	push_error("[Network] Connection to server failed!")
 	_update_info()
+
+
+func _on_server_disconnected() -> void:
+	if _ignore_next_server_disconnect:
+		_ignore_next_server_disconnect = false
+		_add_ping_log(-1, "Local client disconnected from referee.")
+		_update_info()
+		return
+
+	push_error("[Network] Referee disconnected. Ending match.")
+	_match_ended = true
+	_add_ping_log(-1, "Referee disconnected. Match ended.")
 
 
 # ============================================================
@@ -175,10 +205,15 @@ func _spawn_character(peer_id: int) -> void:
 
 
 func _remove_character(peer_id: int) -> void:
+	_disconnect_deadlines_by_peer_id.erase(peer_id)
+	_move_inputs_by_peer_id.erase(peer_id)
+
 	for child in _character_container.get_children():
 		if child.name == str(peer_id):
 			child.queue_free()
 			print("[Spawner] Removed CharacterBase for peer %d" % peer_id)
+			if _local_character != null and _local_character.name == str(peer_id):
+				_local_character = null
 			return
 
 
@@ -198,7 +233,7 @@ func request_ping() -> void:
 @rpc("authority", "call_local", "reliable")
 func broadcast_ping(from_id: int) -> void:
 	print("[RPC] broadcast_ping() - peer %d pinged!" % from_id)
-	_add_ping_log(from_id)
+	_add_ping_log(from_id, "Peer %d pinged!" % from_id)
 
 
 @rpc("any_peer", "unreliable_ordered")
@@ -207,6 +242,21 @@ func submit_move_input(input_vector: Vector2) -> void:
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	_move_inputs_by_peer_id[sender_id] = input_vector.limit_length()
+	_disconnect_deadlines_by_peer_id.erase(sender_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func broadcast_match_ended(reason: String, loser_id: int, winner_id: int) -> void:
+	_match_ended = true
+
+	var message: String = "Match ended: %s" % reason
+	if loser_id > 0:
+		message += " loser=%d" % loser_id
+	if winner_id > 0:
+		message += " winner=%d" % winner_id
+
+	print("[Match] %s" % message)
+	_add_ping_log(-1, message)
 
 
 # ============================================================
@@ -255,6 +305,19 @@ func _setup_ui() -> void:
 	_ping_button.custom_minimum_size = Vector2(120, 40)
 	_ping_button.pressed.connect(_on_ping_pressed)
 	main_vbox.add_child(_ping_button)
+
+	if not _is_server:
+		_disconnect_button = Button.new()
+		_disconnect_button.text = "Force Disconnect"
+		_disconnect_button.custom_minimum_size = Vector2(180, 40)
+		_disconnect_button.pressed.connect(_on_force_disconnect_pressed)
+		main_vbox.add_child(_disconnect_button)
+
+		_reconnect_button = Button.new()
+		_reconnect_button.text = "Reconnect"
+		_reconnect_button.custom_minimum_size = Vector2(180, 40)
+		_reconnect_button.pressed.connect(_on_reconnect_pressed)
+		main_vbox.add_child(_reconnect_button)
 
 	# --- Ping Log ---
 	_ping_log = RichTextLabel.new()
@@ -342,7 +405,7 @@ func _submit_local_move_input() -> void:
 	if multiplayer.get_unique_id() <= 0:
 		return
 
-	var input_vector: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	var input_vector: Vector2 = _get_local_move_input()
 	if _has_sent_move_input and input_vector == _last_sent_move_input:
 		return
 
@@ -361,6 +424,77 @@ func _apply_referee_movement() -> void:
 		character.set_move_input(input_vector)
 
 
+func _process_disconnect_grace_timeouts() -> void:
+	var now_seconds: float = _get_now_seconds()
+	var timed_out_peer_ids: Array[int] = []
+
+	for peer_id_variant in _disconnect_deadlines_by_peer_id.keys():
+		var peer_id: int = int(peer_id_variant)
+		var deadline: float = _disconnect_deadlines_by_peer_id[peer_id]
+		if now_seconds < deadline:
+			continue
+
+		timed_out_peer_ids.append(peer_id)
+
+	for peer_id in timed_out_peer_ids:
+		_handle_disconnect_timeout(peer_id)
+
+
+func _mark_peer_disconnected(peer_id: int) -> void:
+	_move_inputs_by_peer_id.erase(peer_id)
+	_disconnect_deadlines_by_peer_id[peer_id] = _get_now_seconds() + DISCONNECT_GRACE_PERIOD_SEC
+
+	var character: CharacterBase = _find_character_by_peer_id(peer_id)
+	if character != null:
+		character.set_move_input(Vector2.ZERO)
+
+	print(
+		(
+			"[Network] Peer %d entered disconnect grace period (%.1fs)"
+			% [peer_id, DISCONNECT_GRACE_PERIOD_SEC]
+		)
+	)
+
+
+func _handle_disconnect_timeout(peer_id: int) -> void:
+	if _match_ended:
+		return
+
+	_disconnect_deadlines_by_peer_id.erase(peer_id)
+	_move_inputs_by_peer_id.erase(peer_id)
+
+	var winner_id: int = _find_first_active_peer_id_except(peer_id)
+	var reason: String = "disconnect timeout after %.1f seconds" % DISCONNECT_GRACE_PERIOD_SEC
+	broadcast_match_ended.rpc(reason, peer_id, winner_id)
+	_remove_character(peer_id)
+
+
+func _find_character_by_peer_id(peer_id: int) -> CharacterBase:
+	for child in _character_container.get_children():
+		if child.name != str(peer_id):
+			continue
+
+		var character: CharacterBase = child as CharacterBase
+		assert(character != null, "TestCombat: expected CharacterBase for peer lookup")
+		return character
+
+	return null
+
+
+func _find_first_active_peer_id_except(excluded_peer_id: int) -> int:
+	for child in _character_container.get_children():
+		var character: CharacterBase = child as CharacterBase
+		assert(character != null, "TestCombat: expected CharacterBase under CharacterContainer")
+
+		var peer_id: int = int(character.name)
+		if peer_id == excluded_peer_id:
+			continue
+
+		return peer_id
+
+	return -1
+
+
 func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 	var synchronizer: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
 	synchronizer.name = "StateSynchronizer"
@@ -374,8 +508,7 @@ func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 	replication_config.add_property(position_path)
 	replication_config.property_set_spawn(position_path, true)
 	replication_config.property_set_replication_mode(
-		position_path,
-		SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		position_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
 	)
 	synchronizer.replication_config = replication_config
 
@@ -405,6 +538,59 @@ func _spawn_character_node(data: Variant) -> Node:
 	return character
 
 
+func _get_local_move_input() -> Vector2:
+	if _player_hud != null and _player_hud.has_method("get_move_input"):
+		var hud_input: Variant = _player_hud.call("get_move_input")
+		assert(hud_input is Vector2, "TestCombat: PlayerHud.get_move_input must return Vector2")
+		var move_input: Vector2 = hud_input
+		if move_input != Vector2.ZERO:
+			return move_input
+
+	return Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+
+
+func _get_now_seconds() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+func _disconnect_local_client() -> void:
+	if _is_server:
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+
+	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	_ignore_next_server_disconnect = true
+	multiplayer.multiplayer_peer = null
+	peer.close()
+	_has_sent_move_input = false
+	_last_sent_move_input = Vector2.ZERO
+	_local_character = null
+	_add_ping_log(-1, "Forced local disconnect. Reconnect within 10 seconds to test grace period.")
+	_update_info()
+
+
+func _reconnect_local_client() -> void:
+	if _is_server:
+		return
+	if multiplayer.multiplayer_peer != null:
+		var status: MultiplayerPeer.ConnectionStatus = multiplayer.multiplayer_peer.get_connection_status()
+		if status == MultiplayerPeer.CONNECTION_CONNECTING or status == MultiplayerPeer.CONNECTION_CONNECTED:
+			_add_ping_log(-1, "Reconnect skipped: client is already connecting or connected.")
+			return
+
+	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
+	var error: int = peer.create_client("localhost", SERVER_PORT)
+	if error != OK:
+		push_error("[Network] Failed to reconnect client: %d" % error)
+		return
+
+	_match_ended = false
+	multiplayer.multiplayer_peer = peer
+	_add_ping_log(-1, "Reconnect requested.")
+	_update_info()
+
+
 # ============================================================
 # UI Callbacks
 # ============================================================
@@ -415,6 +601,22 @@ func _on_ping_pressed() -> void:
 	request_ping.rpc_id(1)  # Send to server (peer ID 1)
 
 
-func _add_ping_log(from_id: int) -> void:
-	var msg: String = "[color=cyan]Peer %d pinged![/color]" % from_id
+func _on_force_disconnect_pressed() -> void:
+	_disconnect_local_client()
+
+
+func _on_reconnect_pressed() -> void:
+	_reconnect_local_client()
+
+
+func _add_ping_log(from_id: int, text: String) -> void:
+	if _ping_log == null:
+		return
+
+	var msg: String = text
+	if from_id > 0:
+		msg = "[color=cyan]%s[/color]" % text
+	else:
+		msg = "[color=yellow]%s[/color]" % text
+
 	_ping_log.append_text(msg + "\n")

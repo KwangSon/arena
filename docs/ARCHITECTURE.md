@@ -168,6 +168,18 @@ A naive server-authoritative model where the client just *waits* for referee res
 - Rollback netcode
 - Delta-compressed snapshots beyond Godot's built-in `MultiplayerSynchronizer`
 
+## Disconnect Policy
+
+Disconnect handling is **referee-authoritative** and does **not** pause the match.
+
+- **Grace period:** `10 seconds`
+- **Match flow during grace:** the match continues normally
+- **Referee behavior:** if a client stops responding, the referee immediately clears that player's input and freezes their character in place
+- **Timeout result:** if the player does not recover within the 10-second grace window, that player forfeits the match
+- **Match end:** after a disconnect timeout forfeit, the referee ends the match and broadcasts the result
+
+This policy is intended for unstable mobile connections: temporary packet loss or a short connection drop should not cause an instant loss, but the game should also remain resistant to pause abuse.
+
 These can be added later if data shows they are needed.
 
 ## Directory Structure
