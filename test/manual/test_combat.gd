@@ -24,6 +24,7 @@ const SERVER_PORT: int = 7777
 const MAX_CLIENTS: int = 4
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
+const REFEREE_PEER_ID: int = 1
 
 # Network
 var _is_server: bool = false
@@ -31,6 +32,11 @@ var _is_server: bool = false
 # Spawner
 var _spawner: MultiplayerSpawner
 var _character_container: Node2D
+var _camera: Camera2D
+var _local_character: CharacterBase
+var _move_inputs_by_peer_id: Dictionary = {}
+var _last_sent_move_input: Vector2 = Vector2.ZERO
+var _has_sent_move_input: bool = false
 
 # UI nodes
 var _canvas: CanvasLayer
@@ -47,6 +53,28 @@ func _ready() -> void:
 	_setup_ui()
 	_setup_network()
 	_update_info()
+
+
+func _process(_delta: float) -> void:
+	if _is_server:
+		return
+	if _camera == null:
+		return
+
+	if _local_character == null:
+		_local_character = _find_local_character()
+	if _local_character == null:
+		return
+
+	_camera.global_position = _local_character.global_position
+
+
+func _physics_process(_delta: float) -> void:
+	if _is_server:
+		_apply_referee_movement()
+		return
+
+	_submit_local_move_input()
 
 
 # ============================================================
@@ -137,18 +165,12 @@ func _spawn_character(peer_id: int) -> void:
 			print("[Spawner] Character already exists for peer %d, skipping" % peer_id)
 			return
 
-	# Manually instantiate so we can set the name BEFORE adding to the tree.
-	# MultiplayerSpawner auto-replicates children added to spawn_path on the server.
-	var character: CharacterBody2D = CHARACTER_SCENE.instantiate() as CharacterBody2D
-	assert(character != null, "TestCombat: failed to instantiate CharacterBase scene")
-	assert(
-		character.has_method("set_move_input"),
-		"TestCombat: CharacterBase scene is not using src/character/character_base.gd; save the scene-script attachment in the editor"
-	)
-	character.name = str(peer_id)
-	# Random spawn position for now
-	character.position = Vector2(randf_range(100, 500), randf_range(100, 400))
-	_character_container.add_child(character, true)
+	var spawn_data: Dictionary = {
+		"peer_id": peer_id,
+		"position": Vector2(randf_range(100, 500), randf_range(100, 400)),
+	}
+	var character: Node = _spawner.spawn(spawn_data)
+	assert(character != null, "TestCombat: failed to spawn CharacterBase for peer %d" % peer_id)
 	print("[Spawner] Spawned CharacterBase for peer %d" % peer_id)
 
 
@@ -179,6 +201,14 @@ func broadcast_ping(from_id: int) -> void:
 	_add_ping_log(from_id)
 
 
+@rpc("any_peer", "unreliable_ordered")
+func submit_move_input(input_vector: Vector2) -> void:
+	assert(_is_server, "TestCombat.submit_move_input must only run on referee")
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	_move_inputs_by_peer_id[sender_id] = input_vector.limit_length()
+
+
 # ============================================================
 # UI Setup
 # ============================================================
@@ -200,11 +230,14 @@ func _setup_ui() -> void:
 	_character_container.name = "CharacterContainer"
 	add_child(_character_container)
 
+	if not _is_server:
+		_setup_local_camera()
+
 	# --- MultiplayerSpawner ---
 	# Add spawner to tree first, then set spawn_path
 	_spawner = MultiplayerSpawner.new()
 	_spawner.name = "CharacterSpawner"
-	_spawner.add_spawnable_scene(CHARACTER_SCENE.resource_path)
+	_spawner.spawn_function = _spawn_character_node
 	add_child(_spawner)
 	_spawner.spawn_path = _character_container.get_path()
 
@@ -276,6 +309,100 @@ func _ensure_player_hud() -> void:
 func _configure_manual_test_input() -> void:
 	Input.set_emulate_touch_from_mouse(true)
 	Input.set_emulate_mouse_from_touch(false)
+
+
+func _setup_local_camera() -> void:
+	_camera = Camera2D.new()
+	_camera.name = "LocalCamera"
+	_camera.enabled = true
+	add_child(_camera)
+
+
+func _find_local_character() -> CharacterBase:
+	var local_peer_id: int = multiplayer.get_unique_id()
+	if local_peer_id <= 0:
+		return null
+
+	for child in _character_container.get_children():
+		if child.name != str(local_peer_id):
+			continue
+
+		var character: CharacterBase = child as CharacterBase
+		assert(character != null, "TestCombat: expected CharacterBase for local character")
+		return character
+
+	return null
+
+
+func _submit_local_move_input() -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+	if multiplayer.get_unique_id() <= 0:
+		return
+
+	var input_vector: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	if _has_sent_move_input and input_vector == _last_sent_move_input:
+		return
+
+	_has_sent_move_input = true
+	_last_sent_move_input = input_vector
+	submit_move_input.rpc_id(REFEREE_PEER_ID, input_vector)
+
+
+func _apply_referee_movement() -> void:
+	for child in _character_container.get_children():
+		var character: CharacterBase = child as CharacterBase
+		assert(character != null, "TestCombat: expected CharacterBase under CharacterContainer")
+
+		var peer_id: int = int(character.name)
+		var input_vector: Vector2 = _move_inputs_by_peer_id.get(peer_id, Vector2.ZERO)
+		character.set_move_input(input_vector)
+
+
+func _setup_character_synchronizer(character: CharacterBody2D) -> void:
+	var synchronizer: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
+	synchronizer.name = "StateSynchronizer"
+	synchronizer.root_path = NodePath("..")
+	synchronizer.replication_interval = 0.0
+	synchronizer.delta_interval = 0.0
+	synchronizer.set_multiplayer_authority(REFEREE_PEER_ID)
+
+	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
+	var position_path: NodePath = NodePath(".:position")
+	replication_config.add_property(position_path)
+	replication_config.property_set_spawn(position_path, true)
+	replication_config.property_set_replication_mode(
+		position_path,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+	synchronizer.replication_config = replication_config
+
+	character.add_child(synchronizer, true)
+
+
+func _spawn_character_node(data: Variant) -> Node:
+	assert(data is Dictionary, "TestCombat: spawn data must be a Dictionary")
+
+	var spawn_data: Dictionary = data
+	assert(spawn_data.has("peer_id"), "TestCombat: spawn data missing peer_id")
+	assert(spawn_data.has("position"), "TestCombat: spawn data missing position")
+
+	var character: CharacterBody2D = CHARACTER_SCENE.instantiate() as CharacterBody2D
+	assert(character != null, "TestCombat: failed to instantiate CharacterBase scene")
+	assert(
+		character.has_method("set_move_input"),
+		"TestCombat: CharacterBase scene is not using src/character/character_base.gd; save the scene-script attachment in the editor"
+	)
+
+	var spawn_position: Vector2 = spawn_data["position"]
+	character.set_multiplayer_authority(REFEREE_PEER_ID)
+	character.name = str(spawn_data["peer_id"])
+	character.position = spawn_position
+	_setup_character_synchronizer(character)
+
+	return character
 
 
 # ============================================================
