@@ -16,15 +16,23 @@ sudo apt install python3-venv python3-pip
 
 ### Godot
 
-Add an alias to your shell profile (`~/.zshrc` or `~/.bashrc`) pointing to the Godot binary:
+Create a symlink to the Godot binary in the **project root**. This lets the Stop hook (`.claude/hooks/check.sh`) and other scripts invoke Godot via `./godot` regardless of where the engine lives on your machine. Shell aliases don't work here — they're only loaded by interactive shells, not by hook scripts.
 
+**macOS**
 ```bash
-alias godot="/Applications/Godot.app/Contents/MacOS/Godot"
+ln -s /Applications/Godot.app/Contents/MacOS/Godot ./godot
 ```
 
-Reload your shell:
+**Linux**
 ```bash
-source ~/.zshrc
+ln -s /path/to/your/Godot ./godot
+```
+
+The symlink is gitignored, so each contributor sets up their own.
+
+Verify:
+```bash
+./godot --version
 ```
 
 ---

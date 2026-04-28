@@ -3,3 +3,6 @@
 /android/
 .venv
 
+# Per-user symlink to Godot binary (see docs/setup.md)
+/godot
+
