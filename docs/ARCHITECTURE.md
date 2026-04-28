@@ -2,7 +2,7 @@
 
 ## Overview
 
-Arena is a Godot 4.6 mobile multiplayer battle game built on a **referee-authoritative** model. One Godot instance runs as the *referee* (authoritative server) and the rest run as *players* (clients). All gameplay decisions — movement validation, hit detection, victory checks, RNG rolls — are made by the referee.
+Arena is a Godot 4.6 mobile **2D** multiplayer battle game built on a **referee-authoritative** model. One Godot instance runs as the *referee* (authoritative server) and the rest run as *players* (clients). All gameplay decisions — movement validation, hit detection, victory checks, RNG rolls — are made by the referee.
 
 **Current target mode: TDM (Team Deathmatch)** — 3v3 (6 players + 1 referee instance).
 
@@ -353,7 +353,7 @@ func check_victory() -> int:
     assert(false, "IModeManager.check_victory must be overridden")
     return -1
 
-func get_spawn_positions(_team_id: int) -> Array[Vector3]:
+func get_spawn_positions(_team_id: int) -> Array[Vector2]:
     assert(false, "IModeManager.get_spawn_positions must be overridden")
     return []
 ```

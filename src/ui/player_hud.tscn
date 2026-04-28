@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://dfmkhy6rbchlo"]
+
+[ext_resource type="PackedScene" uid="uid://dmr0fcamx7t56" path="res://addons/virtual_joystick/virtual_joystick_scene.tscn" id="1_16o8t"]
+
+[node name="PlayerHud" type="Control" unique_id=483662765]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Virtual Joystick" parent="." unique_id=2029356628 instance=ExtResource("1_16o8t")]
+layout_mode = 1
