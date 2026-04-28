@@ -23,6 +23,7 @@ extends Node2D
 const SERVER_PORT: int = 7777
 const MAX_CLIENTS: int = 4
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
+const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 
 # Network
 var _is_server: bool = false
@@ -37,9 +38,12 @@ var _info_panel: PanelContainer
 var _info_label: Label
 var _ping_button: Button
 var _ping_log: RichTextLabel
+var _player_hud: Control
 
 
 func _ready() -> void:
+	_is_server = "--mode=referee" in OS.get_cmdline_args()
+	_configure_manual_test_input()
 	_setup_ui()
 	_setup_network()
 	_update_info()
@@ -51,9 +55,6 @@ func _ready() -> void:
 
 
 func _setup_network() -> void:
-	var args: Array = OS.get_cmdline_args()
-	_is_server = "--mode=referee" in args
-
 	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 
 	if _is_server:
@@ -111,6 +112,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	print("[Network] Successfully connected to server! My id: %d" % multiplayer.get_unique_id())
+	_ensure_player_hud()
 	_update_info()
 
 
@@ -137,7 +139,12 @@ func _spawn_character(peer_id: int) -> void:
 
 	# Manually instantiate so we can set the name BEFORE adding to the tree.
 	# MultiplayerSpawner auto-replicates children added to spawn_path on the server.
-	var character: Node = CHARACTER_SCENE.instantiate()
+	var character: CharacterBody2D = CHARACTER_SCENE.instantiate() as CharacterBody2D
+	assert(character != null, "TestCombat: failed to instantiate CharacterBase scene")
+	assert(
+		character.has_method("set_move_input"),
+		"TestCombat: CharacterBase scene is not using src/character/character_base.gd; save the scene-script attachment in the editor"
+	)
 	character.name = str(peer_id)
 	# Random spawn position for now
 	character.position = Vector2(randf_range(100, 500), randf_range(100, 400))
@@ -223,6 +230,9 @@ func _setup_ui() -> void:
 	_ping_log.scroll_following = true
 	main_vbox.add_child(_ping_log)
 
+	if not _is_server:
+		_ensure_player_hud()
+
 
 func _update_info() -> void:
 	var mode: String = "REFEREE (Server)" if _is_server else "PLAYER (Client)"
@@ -248,6 +258,24 @@ func _update_info() -> void:
 	text += "My ID: %d\n" % my_id
 	text += "Peers (%d): %s" % [peer_count, peers_str]
 	_info_label.text = text
+
+
+func _ensure_player_hud() -> void:
+	if _is_server:
+		return
+	if _player_hud != null:
+		return
+
+	_player_hud = PLAYER_HUD_SCENE.instantiate() as Control
+	assert(_player_hud != null, "TestCombat: failed to instantiate PlayerHud")
+	_player_hud.name = "PlayerHud"
+	_player_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_canvas.add_child(_player_hud)
+
+
+func _configure_manual_test_input() -> void:
+	Input.set_emulate_touch_from_mouse(true)
+	Input.set_emulate_mouse_from_touch(false)
 
 
 # ============================================================
