@@ -1,0 +1,176 @@
+class_name SkillExecutor extends RefCounted
+
+signal hit_occurred(attacker_id: int, target_id: int, damage: int, skill_id: String)
+signal character_died(loser_id: int, winner_id: int)
+
+const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
+
+var _character_container: Node2D
+var _projectile_spawner: MultiplayerSpawner
+var _referee_peer_id: int
+var _skill_last_used: Dictionary = {}
+
+
+func setup(
+	character_container: Node2D, projectile_spawner: MultiplayerSpawner, referee_peer_id: int
+) -> void:
+	assert(character_container != null, "SkillExecutor.setup: character_container is null")
+	assert(projectile_spawner != null, "SkillExecutor.setup: projectile_spawner is null")
+	_character_container = character_container
+	_projectile_spawner = projectile_spawner
+	_referee_peer_id = referee_peer_id
+	_projectile_spawner.spawn_function = create_projectile_node
+
+
+func try_execute_skill(
+	attacker: CharacterBase, attacker_id: int, skill_idx: int, skill: SkillData, direction: Vector2
+) -> void:
+	assert(attacker != null, "SkillExecutor.try_execute_skill: attacker is null")
+	assert(skill != null, "SkillExecutor.try_execute_skill: skill is null")
+
+	if not _skill_last_used.has(attacker_id):
+		_skill_last_used[attacker_id] = {}
+	var peer_cooldowns: Dictionary = _skill_last_used[attacker_id]
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if peer_cooldowns.has(skill_idx) and now - peer_cooldowns[skill_idx] < skill.cooldown:
+		return
+	if attacker.mp < skill.mp_cost:
+		return
+
+	attacker.mp -= skill.mp_cost
+	peer_cooldowns[skill_idx] = now
+
+	match skill.skill_type:
+		SkillData.Type.MELEE:
+			_execute_melee(attacker, attacker_id, skill)
+		SkillData.Type.AOE:
+			_execute_aoe(attacker, attacker_id, skill)
+		SkillData.Type.PROJECTILE:
+			_execute_projectile(attacker, attacker_id, skill, direction)
+
+
+func clear_peer(peer_id: int) -> void:
+	_skill_last_used.erase(peer_id)
+
+
+func create_projectile_node(data: Variant) -> Node:
+	assert(data is Dictionary, "SkillExecutor: projectile spawn data must be a Dictionary")
+	var spawn_data: Dictionary = data
+
+	var projectile: Projectile = PROJECTILE_SCENE.instantiate() as Projectile
+	assert(projectile != null, "SkillExecutor: failed to instantiate Projectile scene")
+
+	projectile.attacker_id = spawn_data["attacker_id"]
+	projectile.damage = spawn_data["damage"]
+	projectile.skill_id = spawn_data["skill_id"]
+	projectile.position = spawn_data["position"]
+	projectile.setup(spawn_data["direction"], spawn_data["speed"], spawn_data["range"])
+	projectile.collision_layer = 0
+	projectile.collision_mask = spawn_data.get("collision_mask", 1)
+	projectile.set_multiplayer_authority(_referee_peer_id)
+	_setup_projectile_synchronizer(projectile)
+
+	var err: int = projectile.body_hit.connect(_on_projectile_body_hit)
+	assert(err == OK, "SkillExecutor: failed to connect projectile body_hit: %d" % err)
+
+	return projectile
+
+
+func _execute_melee(attacker: CharacterBase, attacker_id: int, skill: SkillData) -> void:
+	var closest_target: CharacterBase = null
+	var closest_dist: float = skill.range
+
+	for child in _character_container.get_children():
+		var target: CharacterBase = child as CharacterBase
+		assert(target != null, "SkillExecutor: expected CharacterBase under CharacterContainer")
+		if target == attacker:
+			continue
+		var dist: float = attacker.global_position.distance_to(target.global_position)
+		if dist <= closest_dist:
+			closest_dist = dist
+			closest_target = target
+
+	if closest_target == null:
+		return
+	_apply_damage(attacker_id, int(closest_target.name), closest_target, skill)
+
+
+func _execute_aoe(attacker: CharacterBase, attacker_id: int, skill: SkillData) -> void:
+	for child in _character_container.get_children():
+		var target: CharacterBase = child as CharacterBase
+		assert(target != null, "SkillExecutor: expected CharacterBase under CharacterContainer")
+		if target == attacker:
+			continue
+		var dist: float = attacker.global_position.distance_to(target.global_position)
+		if dist <= skill.range:
+			_apply_damage(attacker_id, int(target.name), target, skill)
+
+
+func _execute_projectile(
+	attacker: CharacterBase, attacker_id: int, skill: SkillData, direction: Vector2
+) -> void:
+	var enemy_layer: int = 2 if attacker.team_id == 1 else 1
+	(
+		_projectile_spawner
+		. spawn(
+			{
+				"attacker_id": attacker_id,
+				"position": attacker.global_position,
+				"direction": direction,
+				"damage": skill.damage,
+				"speed": skill.projectile_speed,
+				"range": skill.range,
+				"skill_id": skill.id,
+				"collision_mask": enemy_layer,
+			}
+		)
+	)
+
+
+func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
+	var target: CharacterBase = body as CharacterBase
+	if target == null:
+		return
+	var dummy_skill := SkillData.new()
+	dummy_skill.damage = projectile.damage
+	dummy_skill.id = projectile.skill_id
+	_apply_damage(projectile.attacker_id, int(target.name), target, dummy_skill)
+
+
+func _apply_damage(
+	attacker_id: int, target_id: int, target: CharacterBase, skill: SkillData
+) -> void:
+	target.hp = max(0, target.hp - skill.damage)
+	hit_occurred.emit(attacker_id, target_id, skill.damage, skill.id)
+	if target.hp <= 0:
+		character_died.emit(target_id, _find_first_alive_except(target_id))
+
+
+func _find_first_alive_except(excluded_id: int) -> int:
+	for child in _character_container.get_children():
+		var character: CharacterBase = child as CharacterBase
+		assert(character != null, "SkillExecutor: expected CharacterBase under CharacterContainer")
+		var peer_id: int = int(character.name)
+		if peer_id != excluded_id:
+			return peer_id
+	return -1
+
+
+func _setup_projectile_synchronizer(projectile: Node2D) -> void:
+	var synchronizer: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
+	synchronizer.name = "StateSynchronizer"
+	synchronizer.root_path = NodePath("..")
+	synchronizer.replication_interval = 0.0
+	synchronizer.delta_interval = 0.0
+	synchronizer.set_multiplayer_authority(_referee_peer_id)
+
+	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
+	var pos_path := NodePath(".:position")
+	replication_config.add_property(pos_path)
+	replication_config.property_set_spawn(pos_path, true)
+	replication_config.property_set_replication_mode(
+		pos_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+
+	synchronizer.replication_config = replication_config
+	projectile.add_child(synchronizer, true)
