@@ -14,11 +14,14 @@ var hp: int = 100:
 		hp = value
 		if _hp_bar != null:
 			_hp_bar.value = hp
-var mp: int = 100
-var bp: int = 100
+var mp: float = 100.0
+var bp: float = 100.0
 var max_hp: int = 100
-var max_mp: int = 100
-var max_bp: int = 100
+var max_mp: float = 100.0
+var max_bp: float = 100.0
+var bp_regen: float = 5.0
+var mp_regen: float = 1.0
+var is_dashing: bool = false
 var facing_direction: Vector2 = Vector2.RIGHT
 var team_id: int = 0
 
@@ -80,6 +83,8 @@ func assign_character_data(data: CharacterData) -> void:
 	max_hp = data.max_hp
 	max_mp = data.max_mp
 	max_bp = data.max_bp
+	bp_regen = data.bp_regen
+	mp_regen = data.mp_regen
 	hp = max_hp
 	mp = max_mp
 	bp = max_bp
@@ -108,5 +113,6 @@ func _physics_process(_delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
 
-	velocity = _move_input * _move_speed
+	var speed: float = _move_speed * 2.0 if is_dashing else _move_speed
+	velocity = _move_input * speed
 	move_and_slide()

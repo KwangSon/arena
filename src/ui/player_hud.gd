@@ -50,7 +50,7 @@ func _position_skill_buttons() -> void:
 	_special_button.position = Vector2(_BUTTON_X_OFFSET, _BUTTON_Y_OFFSET)
 
 
-func update_resources(mp: int, max_mp: int, bp: int, max_bp: int) -> void:
+func update_resources(mp: float, max_mp: float, bp: float, max_bp: float) -> void:
 	_mp_bar.max_value = max_mp
 	_mp_bar.value = mp
 	_bp_bar.max_value = max_bp

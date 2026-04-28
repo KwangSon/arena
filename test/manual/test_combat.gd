@@ -27,6 +27,8 @@ const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
 const REFEREE_PEER_ID: int = 1
 const DISCONNECT_GRACE_PERIOD_SEC: float = 10.0
+const BP_DASH_DRAIN_PER_SEC: float = 25.0
+const DOUBLE_TAP_WINDOW_SEC: float = 0.3
 
 # Network
 var _is_server: bool = false
@@ -45,6 +47,8 @@ var _disconnect_deadlines_by_peer_id: Dictionary = {}
 var _skill_last_used_by_peer_id: Dictionary = {}
 var _last_sent_move_input: Vector2 = Vector2.ZERO
 var _has_sent_move_input: bool = false
+var _joystick_was_active: bool = false
+var _last_joystick_active_time: float = -1.0
 
 # UI nodes
 var _canvas: CanvasLayer
@@ -96,11 +100,12 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	if _is_server:
-		_apply_referee_movement()
+		_apply_referee_movement(_delta)
 		_process_disconnect_grace_timeouts()
 		return
 
 	_submit_local_move_input()
+	_detect_joystick_dash()
 
 
 # ============================================================
@@ -250,6 +255,18 @@ func request_ping() -> void:
 func broadcast_ping(from_id: int) -> void:
 	print("[RPC] broadcast_ping() - peer %d pinged!" % from_id)
 	_add_ping_log(from_id, "Peer %d pinged!" % from_id)
+
+
+@rpc("any_peer", "reliable")
+func request_dash() -> void:
+	assert(_is_server, "TestCombat.request_dash must only run on referee")
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var character: CharacterBase = _find_character_by_peer_id(sender_id)
+	if character == null:
+		return
+	if character.bp <= 0.0:
+		return
+	character.is_dashing = true
 
 
 @rpc("any_peer", "unreliable_ordered")
@@ -615,7 +632,7 @@ func _submit_local_move_input() -> void:
 	submit_move_input.rpc_id(REFEREE_PEER_ID, input_vector)
 
 
-func _apply_referee_movement() -> void:
+func _apply_referee_movement(delta: float) -> void:
 	for child in _character_container.get_children():
 		var character: CharacterBase = child as CharacterBase
 		assert(character != null, "TestCombat: expected CharacterBase under CharacterContainer")
@@ -623,6 +640,17 @@ func _apply_referee_movement() -> void:
 		var peer_id: int = int(character.name)
 		var input_vector: Vector2 = _move_inputs_by_peer_id.get(peer_id, Vector2.ZERO)
 		character.set_move_input(input_vector)
+
+		if character.is_dashing:
+			if input_vector == Vector2.ZERO:
+				character.is_dashing = false
+			else:
+				character.bp = maxf(0.0, character.bp - BP_DASH_DRAIN_PER_SEC * delta)
+				if character.bp <= 0.0:
+					character.is_dashing = false
+		else:
+			character.bp = minf(character.max_bp, character.bp + character.bp_regen * delta)
+			character.mp = minf(character.max_mp, character.mp + character.mp_regen * delta)
 
 
 func _process_disconnect_grace_timeouts() -> void:
@@ -706,7 +734,13 @@ func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 
 	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
 
-	for prop in [NodePath(".:position"), NodePath(".:hp"), NodePath(".:mp"), NodePath(".:bp")]:
+	for prop in [
+		NodePath(".:position"),
+		NodePath(".:hp"),
+		NodePath(".:mp"),
+		NodePath(".:bp"),
+		NodePath(".:is_dashing"),
+	]:
 		replication_config.add_property(prop)
 		replication_config.property_set_spawn(prop, true)
 		replication_config.property_set_replication_mode(
@@ -775,6 +809,29 @@ func _spawn_character_node(data: Variant) -> Node:
 	_setup_character_synchronizer(character)
 
 	return character
+
+
+func _detect_joystick_dash() -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+
+	var move_input: Vector2 = _get_local_move_input()
+	var joystick_active: bool = move_input != Vector2.ZERO
+
+	if joystick_active and not _joystick_was_active:
+		var now: float = _get_now_seconds()
+		if (
+			_last_joystick_active_time >= 0.0
+			and now - _last_joystick_active_time <= DOUBLE_TAP_WINDOW_SEC
+		):
+			request_dash.rpc_id(REFEREE_PEER_ID)
+			_last_joystick_active_time = -1.0
+		else:
+			_last_joystick_active_time = now
+
+	_joystick_was_active = joystick_active
 
 
 func _get_local_move_input() -> Vector2:
