@@ -195,13 +195,16 @@ func _spawn_character(peer_id: int) -> void:
 			print("[Spawner] Character already exists for peer %d, skipping" % peer_id)
 			return
 
+	var spawn_count: int = _character_container.get_child_count()
+	var character_id: String = "warrior" if spawn_count % 2 == 0 else "mage"
 	var spawn_data: Dictionary = {
 		"peer_id": peer_id,
 		"position": Vector2(randf_range(100, 500), randf_range(100, 400)),
+		"character_id": character_id,
 	}
 	var character: Node = _spawner.spawn(spawn_data)
 	assert(character != null, "TestCombat: failed to spawn CharacterBase for peer %d" % peer_id)
-	print("[Spawner] Spawned CharacterBase for peer %d" % peer_id)
+	print("[Spawner] Spawned %s for peer %d" % [character_id, peer_id])
 
 
 func _remove_character(peer_id: int) -> void:
@@ -542,6 +545,15 @@ func _spawn_character_node(data: Variant) -> Node:
 			+ " save the scene-script attachment in the editor"
 		)
 	)
+
+	var character_base: CharacterBase = character as CharacterBase
+	assert(character_base != null, "TestCombat: CharacterBody2D is not a CharacterBase")
+
+	var character_id: String = spawn_data.get("character_id", "warrior")
+	var char_data: CharacterData = (
+		CharacterDefinitions.warrior() if character_id == "warrior" else CharacterDefinitions.mage()
+	)
+	character_base.assign_character_data(char_data)
 
 	var spawn_position: Vector2 = spawn_data["position"]
 	character.set_multiplayer_authority(REFEREE_PEER_ID)

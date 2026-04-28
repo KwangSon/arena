@@ -14,11 +14,13 @@ func test_character_base_moves_only_for_multiplayer_authority() -> void:
 		authority_character.is_multiplayer_authority(),
 		"Peer 1 should be local authority in offline tests"
 	)
+	var data: CharacterData = CharacterDefinitions.warrior()
+	authority_character.assign_character_data(data)
 	authority_character.set_move_input(Vector2.RIGHT)
 
 	authority_character._physics_process(0.0)
 
-	assert_eq(authority_character.velocity, Vector2.RIGHT * CharacterBase.SPEED)
+	assert_eq(authority_character.velocity, Vector2.RIGHT * data.move_speed)
 
 	var remote_character: CharacterBase = autofree(CHARACTER_BASE_SCRIPT.new())
 	root.add_child(remote_character)

@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://dmr0fcamx7t56" path="res://addons/virtual_joystick/virtual_joystick_scene.tscn" id="1_16o8t"]
 [ext_resource type="Script" uid="uid://5lv57kkp5y7h" path="res://src/ui/player_hud.gd" id="1_ys8k0"]
+[ext_resource type="Texture2D" uid="uid://k7cjwk4rb1v0" path="res://icon.svg" id="3_i7kvj"]
 
 [node name="PlayerHud" type="Control" unique_id=483662765]
 layout_mode = 3
@@ -14,3 +15,24 @@ script = ExtResource("1_ys8k0")
 
 [node name="Virtual Joystick" parent="." unique_id=2029356628 instance=ExtResource("1_16o8t")]
 layout_mode = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=330558476]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -40.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Skill1Button" type="TouchScreenButton" parent="HBoxContainer" unique_id=1601173887]
+texture_normal = ExtResource("3_i7kvj")
+
+[node name="Skill2Button" type="TouchScreenButton" parent="HBoxContainer" unique_id=1383645597]
+texture_normal = ExtResource("3_i7kvj")
+
+[node name="SpecialButton" type="TouchScreenButton" parent="HBoxContainer" unique_id=335263849]
+texture_normal = ExtResource("3_i7kvj")
