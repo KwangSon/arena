@@ -2,10 +2,15 @@
 
 [ext_resource type="Script" uid="uid://u5ujynol7r4b" path="res://src/character/character_base.gd" id="1_pedr7"]
 
+[sub_resource type="SpriteFrames" id="SpriteFrames_pedr7"]
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_4ggy6"]
 
 [node name="CharacterBase" type="CharacterBody2D" unique_id=570664597]
 script = ExtResource("1_pedr7")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=85403223]
+sprite_frames = SubResource("SpriteFrames_pedr7")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1378538489]
 shape = SubResource("RectangleShape2D_4ggy6")

@@ -3,6 +3,11 @@ class_name CharacterBase
 extends CharacterBody2D
 
 const DIRECTION_LINE_LENGTH: float = 50.0
+const _TEAM_COLORS: Array[Color] = [
+	Color(0.5, 0.5, 0.5),  # team 0 (unassigned)
+	Color(0.3, 0.5, 1.0),  # team 1 — blue
+	Color(1.0, 0.3, 0.3),  # team 2 — red
+]
 
 var hp: int = 100
 var mp: int = 100
@@ -16,10 +21,31 @@ var team_id: int = 0
 var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
+var _sprite: AnimatedSprite2D
 var _direction_line: Line2D
 
 
 func _ready() -> void:
+	_sprite = get_node("AnimatedSprite2D") as AnimatedSprite2D
+	assert(_sprite != null, "CharacterBase: AnimatedSprite2D node missing")
+
+	var team_color: Color = _TEAM_COLORS[clampi(team_id, 0, _TEAM_COLORS.size() - 1)]
+	_sprite.modulate = team_color
+
+	# Placeholder visual until sprite frames are added
+	if not _has_sprite_frames():
+		var placeholder: Polygon2D = Polygon2D.new()
+		placeholder.polygon = PackedVector2Array(
+			[
+				Vector2(-15, -20),
+				Vector2(15, -20),
+				Vector2(15, 20),
+				Vector2(-15, 20),
+			]
+		)
+		placeholder.color = team_color
+		add_child(placeholder)
+
 	_direction_line = Line2D.new()
 	_direction_line.width = 3.0
 	_direction_line.default_color = Color.YELLOW
@@ -51,6 +77,15 @@ func set_move_input(input_vector: Vector2) -> void:
 		facing_direction = _move_input.normalized()
 		if _direction_line != null:
 			_direction_line.set_point_position(1, facing_direction * DIRECTION_LINE_LENGTH)
+
+
+func _has_sprite_frames() -> bool:
+	if _sprite.sprite_frames == null:
+		return false
+	for anim_name in _sprite.sprite_frames.get_animation_names():
+		if _sprite.sprite_frames.get_frame_count(anim_name) > 0:
+			return true
+	return false
 
 
 func _physics_process(_delta: float) -> void:

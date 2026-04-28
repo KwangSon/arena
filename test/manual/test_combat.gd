@@ -132,10 +132,6 @@ func _setup_network() -> void:
 		)
 	)
 
-	# Server spawns its own character
-	if _is_server:
-		_spawn_character(multiplayer.get_unique_id())
-
 
 func _on_peer_connected(id: int) -> void:
 	print("[Network] Peer connected: %d" % id)
