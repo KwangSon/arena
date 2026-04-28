@@ -9,7 +9,11 @@ const _TEAM_COLORS: Array[Color] = [
 	Color(1.0, 0.3, 0.3),  # team 2 — red
 ]
 
-var hp: int = 100
+var hp: int = 100:
+	set(value):
+		hp = value
+		if _hp_bar != null:
+			_hp_bar.value = hp
 var mp: int = 100
 var bp: int = 100
 var max_hp: int = 100
@@ -22,12 +26,22 @@ var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
 var _sprite: AnimatedSprite2D
+var _hp_bar: ProgressBar
 var _direction_line: Line2D
 
 
 func _ready() -> void:
 	_sprite = get_node("AnimatedSprite2D") as AnimatedSprite2D
 	assert(_sprite != null, "CharacterBase: AnimatedSprite2D node missing")
+
+	_hp_bar = get_node("HPBar") as ProgressBar
+	assert(_hp_bar != null, "CharacterBase: HPBar node missing")
+	_hp_bar.show_percentage = false
+	_hp_bar.custom_minimum_size = Vector2(40, 6)
+	_hp_bar.size = Vector2(40, 6)
+	_hp_bar.position = Vector2(-20, -32)
+	_hp_bar.max_value = max_hp
+	_hp_bar.value = hp
 
 	var team_color: Color = _TEAM_COLORS[clampi(team_id, 0, _TEAM_COLORS.size() - 1)]
 	_sprite.modulate = team_color

@@ -11,6 +11,9 @@ const _BUTTON_X_OFFSET: float = -60.0
 @onready var _skill_1_button: TouchScreenButton = $HBoxContainer/Skill1Button as TouchScreenButton
 @onready var _skill_2_button: TouchScreenButton = $HBoxContainer/Skill2Button as TouchScreenButton
 @onready var _special_button: TouchScreenButton = $HBoxContainer/SpecialButton as TouchScreenButton
+@onready var _resource_bars: VBoxContainer = $ResourceBars as VBoxContainer
+@onready var _mp_bar: ProgressBar = $ResourceBars/MPBar as ProgressBar
+@onready var _bp_bar: ProgressBar = $ResourceBars/BPBar as ProgressBar
 
 
 func _ready() -> void:
@@ -18,6 +21,17 @@ func _ready() -> void:
 	assert(_skill_1_button != null, "PlayerHud: Skill1Button is missing")
 	assert(_skill_2_button != null, "PlayerHud: Skill2Button is missing")
 	assert(_special_button != null, "PlayerHud: SpecialButton is missing")
+	assert(_resource_bars != null, "PlayerHud: ResourceBars is missing")
+	assert(_mp_bar != null, "PlayerHud: MPBar is missing")
+	assert(_bp_bar != null, "PlayerHud: BPBar is missing")
+
+	_resource_bars.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_resource_bars.custom_minimum_size = Vector2(160, 0)
+
+	_mp_bar.show_percentage = false
+	_mp_bar.custom_minimum_size = Vector2(160, 20)
+	_bp_bar.show_percentage = false
+	_bp_bar.custom_minimum_size = Vector2(160, 20)
 
 	_position_skill_buttons()
 
@@ -34,6 +48,13 @@ func _position_skill_buttons() -> void:
 	_skill_1_button.position = Vector2(_BUTTON_X_OFFSET + -step * 2.0, _BUTTON_Y_OFFSET)
 	_skill_2_button.position = Vector2(_BUTTON_X_OFFSET + -step, _BUTTON_Y_OFFSET)
 	_special_button.position = Vector2(_BUTTON_X_OFFSET, _BUTTON_Y_OFFSET)
+
+
+func update_resources(mp: int, max_mp: int, bp: int, max_bp: int) -> void:
+	_mp_bar.max_value = max_mp
+	_mp_bar.value = mp
+	_bp_bar.max_value = max_bp
+	_bp_bar.value = bp
 
 
 func get_move_input() -> Vector2:

@@ -82,6 +82,14 @@ func _process(_delta: float) -> void:
 
 	_camera.global_position = _local_character.global_position
 
+	if _player_hud != null:
+		_player_hud.update_resources(
+			_local_character.mp,
+			_local_character.max_mp,
+			_local_character.bp,
+			_local_character.max_bp
+		)
+
 
 func _physics_process(_delta: float) -> void:
 	if _match_ended:
@@ -698,7 +706,7 @@ func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 
 	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
 
-	for prop in [NodePath(".:position"), NodePath(".:hp")]:
+	for prop in [NodePath(".:position"), NodePath(".:hp"), NodePath(".:mp"), NodePath(".:bp")]:
 		replication_config.add_property(prop)
 		replication_config.property_set_spawn(prop, true)
 		replication_config.property_set_replication_mode(

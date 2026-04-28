@@ -13,6 +13,17 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_ys8k0")
 
+[node name="ResourceBars" type="VBoxContainer" parent="." unique_id=156575431]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="MPBar" type="ProgressBar" parent="ResourceBars" unique_id=345771315]
+layout_mode = 2
+
+[node name="BPBar" type="ProgressBar" parent="ResourceBars" unique_id=678356484]
+layout_mode = 2
+
 [node name="Virtual Joystick" parent="." unique_id=2029356628 instance=ExtResource("1_16o8t")]
 layout_mode = 1
 

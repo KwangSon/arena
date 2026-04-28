@@ -12,5 +12,9 @@ script = ExtResource("1_pedr7")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=85403223]
 sprite_frames = SubResource("SpriteFrames_pedr7")
 
+[node name="HPBar" type="ProgressBar" parent="." unique_id=1716423201]
+offset_right = 4.0
+offset_bottom = 27.0
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1378538489]
 shape = SubResource("RectangleShape2D_4ggy6")
