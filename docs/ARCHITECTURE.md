@@ -333,8 +333,7 @@ const DEFAULT_MAX_MP: int = 100
 const DEFAULT_MAX_BP: int = 100
 
 # Dash
-const DASH_BP_COST: int = 25
-const DASH_INVULNERABILITY_TIME: float = 0.3
+const BP_DASH_DRAIN_PER_SEC: float = 25.0  # BP drained per second while dashing
 const DOUBLE_TAP_TIME_WINDOW: float = 0.3
 
 # Regen (per second)
@@ -377,19 +376,16 @@ class_name CharacterData extends Resource
 
 var id: String
 var display_name: String
-var attack_type: Enums.AttackType  # MELEE, RANGED
 
 # Stats
 var max_hp: int = 100
 var max_mp: int = 100
 var max_bp: int = 100
-var move_speed: float = 5.0
-var dash_speed: float = 15.0
-var dash_distance: float = 5.0
+var move_speed: float = 300.0
 
 # Skills
-var basic_attack: SkillData
 var skill_1: SkillData
+var skill_2: SkillData
 var ultimate: SkillData
 
 # Regen (per second)
@@ -404,14 +400,16 @@ var bp_regen: float = 5.0
 ```gdscript
 class_name SkillData extends Resource
 
+enum Type { MELEE, PROJECTILE, AOE }
+
 var id: String
-var skill_name: String
+var display_name: String
+var skill_type: SkillData.Type
 var damage: int
 var range: float
 var cooldown: float
 var mp_cost: int = 0
-var projectile_speed: float = 0.0     # 0 = instant / melee
-var skill_type: Enums.SkillType       # MELEE, PROJECTILE, AOE
+var projectile_speed: float = 0.0  # 0 = melee/AOE
 ```
 
 ### CardData
@@ -621,10 +619,11 @@ JOYSTICK DRAG:
   - Speed = move_speed × magnitude
 
 DOUBLE TAP (within DOUBLE_TAP_TIME_WINDOW = 300ms):
-  - Direction = second tap's direction
-  - Require BP ≥ DASH_BP_COST
-  - Execute dash: instant displacement + invulnerability frames
-  - Consume BP
+  - Requires BP > 0
+  - Activates dash mode: speed = move_speed × 2
+  - BP drains at BP_DASH_DRAIN_PER_SEC while dashing
+  - Dash ends when joystick is released OR BP reaches 0
+  - BP regens at bp_regen/sec when not dashing
 ```
 
 ## Combat System
@@ -661,8 +660,9 @@ DOUBLE TAP (within DOUBLE_TAP_TIME_WINDOW = 300ms):
 - Used by Ultimate skill only
 
 ### BP (Burst Points)
-- Max 100, regen `DEFAULT_BP_REGEN`/sec
-- Used by dash; cost `DASH_BP_COST` per dash
+- Max 100, regen `DEFAULT_BP_REGEN`/sec when not dashing
+- Used by dash; drains at `BP_DASH_DRAIN_PER_SEC` continuously while dashing
+- Dash ends automatically when BP reaches 0 or joystick is released
 
 ## Victory Condition
 
@@ -760,26 +760,26 @@ Bottom-up — each phase produces something playable that the next phase builds 
 
 > Naming note: roadmap *Phases* below are independent of the Stage 1 / Stage 2 *network-stack* labels used earlier. Network Stage 2 begins at roadmap Phase 5.
 
-### Phase 1 — Local Multiplayer Infrastructure (mostly done)
+### Phase 1 — Local Multiplayer Infrastructure (done)
 - [x] ENet referee/client connection
 - [x] `MultiplayerSpawner`-based character spawning
 - [x] Basic RPC (request/broadcast)
-- [ ] Disconnect / cleanup handling
-- [ ] Defensive asserts on networking error paths
+- [x] Disconnect / cleanup handling (grace period + timeout forfeit)
 
 ### Phase 2 — Character & Movement
-- [ ] `CharacterBase` with HP/MP/BP
-- [ ] Movement controller with client-side prediction
-- [ ] Joystick + WASD input
-- [ ] Dash (double-tap, BP consumption, i-frames)
+- [x] `CharacterBase` with HP/MP/BP
+- [x] Joystick input
+- [x] Dash (double-tap joystick, continuous BP drain, stops on release or BP=0)
+- [x] MP/BP regen (referee-authoritative, synced via MultiplayerSynchronizer)
+- [ ] Client-side movement prediction + server reconciliation
 - [ ] Other-player position interpolation
 
 ### Phase 3 — Combat
-- [ ] Skill controller (basic + ultimate)
-- [ ] Melee + ranged hit detection (referee-side)
-- [ ] HP / damage system
-- [ ] Cooldown system
-- [ ] Death + elimination logic
+- [x] Skill controller (skill_1, skill_2, ultimate)
+- [x] Melee + AOE + projectile hit detection (referee-side)
+- [x] HP / damage system
+- [x] Cooldown system
+- [x] Death + elimination logic
 
 ### Phase 4 — Match Lifecycle
 - [ ] TDM mode (`tdm_manager.gd` implementing `IModeManager`)
