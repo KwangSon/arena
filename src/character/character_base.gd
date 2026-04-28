@@ -12,6 +12,8 @@ func set_move_input(input_vector: Vector2) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if not is_multiplayer_authority():
 		return
 

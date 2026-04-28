@@ -332,15 +332,23 @@ func _setup_ui() -> void:
 
 func _update_info() -> void:
 	var mode: String = "REFEREE (Server)" if _is_server else "PLAYER (Client)"
-	var my_id: int = multiplayer.get_unique_id()
-	var peer_count: int = multiplayer.get_peers().size()
 
-	# Build connected peers list
-	var peers: PackedInt32Array = multiplayer.get_peers()
-	var peers_str_arr: PackedStringArray = []
-	for peer_id in peers:
-		peers_str_arr.append(str(peer_id))
-	var peers_str: String = ", ".join(peers_str_arr)
+	var my_id: int = 0
+	if multiplayer.multiplayer_peer != null:
+		my_id = multiplayer.get_unique_id()
+
+	# Check if multiplayer peer exists before accessing peers
+	var peer_count: int = 0
+	var peers_str: String = "none"
+	if multiplayer.multiplayer_peer != null:
+		var peers: PackedInt32Array = multiplayer.get_peers()
+		peer_count = peers.size()
+
+		# Build connected peers list
+		var peers_str_arr: PackedStringArray = []
+		for peer_id in peers:
+			peers_str_arr.append(str(peer_id))
+		peers_str = ", ".join(peers_str_arr)
 
 	# Debug print
 	print("=== Debug Info ===")
@@ -382,6 +390,9 @@ func _setup_local_camera() -> void:
 
 
 func _find_local_character() -> CharacterBase:
+	if multiplayer.multiplayer_peer == null:
+		return null
+
 	var local_peer_id: int = multiplayer.get_unique_id()
 	if local_peer_id <= 0:
 		return null
@@ -526,7 +537,10 @@ func _spawn_character_node(data: Variant) -> Node:
 	assert(character != null, "TestCombat: failed to instantiate CharacterBase scene")
 	assert(
 		character.has_method("set_move_input"),
-		"TestCombat: CharacterBase scene is not using src/character/character_base.gd; save the scene-script attachment in the editor"
+		(
+			"TestCombat: CharacterBase scene is not using src/character/character_base.gd;"
+			+ " save the scene-script attachment in the editor"
+		)
 	)
 
 	var spawn_position: Vector2 = spawn_data["position"]
@@ -574,8 +588,13 @@ func _reconnect_local_client() -> void:
 	if _is_server:
 		return
 	if multiplayer.multiplayer_peer != null:
-		var status: MultiplayerPeer.ConnectionStatus = multiplayer.multiplayer_peer.get_connection_status()
-		if status == MultiplayerPeer.CONNECTION_CONNECTING or status == MultiplayerPeer.CONNECTION_CONNECTED:
+		var status: MultiplayerPeer.ConnectionStatus = (
+			multiplayer.multiplayer_peer.get_connection_status()
+		)
+		if (
+			status == MultiplayerPeer.CONNECTION_CONNECTING
+			or status == MultiplayerPeer.CONNECTION_CONNECTED
+		):
 			_add_ping_log(-1, "Reconnect skipped: client is already connecting or connected.")
 			return
 

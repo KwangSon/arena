@@ -116,3 +116,29 @@ func test_broadcast_match_ended_marks_match_as_finished() -> void:
 	assert_true(
 		combat.get("_match_ended"), "Match should be marked as ended after disconnect timeout"
 	)
+
+
+func test_disconnect_local_client_clears_network_state() -> void:
+	var root: Node2D = add_child_autofree(Node2D.new())
+
+	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
+	root.add_child(combat)
+	autofree(combat)
+
+	# Set up initial state
+	combat.set("_has_sent_move_input", true)
+	combat.set("_last_sent_move_input", Vector2.RIGHT)
+
+	# Mock the multiplayer peer check by setting _is_server to false
+	combat.set("_is_server", false)
+
+	# Call disconnect (it should handle null peer gracefully)
+	combat.call("_disconnect_local_client")
+
+	# Verify internal state is cleared
+	assert_false(combat.get("_has_sent_move_input"), "Disconnect should reset move input state")
+	assert_eq(
+		combat.get("_last_sent_move_input"),
+		Vector2.ZERO,
+		"Disconnect should reset last sent move input"
+	)
