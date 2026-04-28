@@ -11,6 +11,7 @@ var max_hp: int = 100
 var max_mp: int = 100
 var max_bp: int = 100
 var facing_direction: Vector2 = Vector2.RIGHT
+var team_id: int = 0
 
 var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO

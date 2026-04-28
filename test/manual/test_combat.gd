@@ -24,6 +24,7 @@ const SERVER_PORT: int = 7777
 const MAX_CLIENTS: int = 4
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
+const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
 const REFEREE_PEER_ID: int = 1
 const DISCONNECT_GRACE_PERIOD_SEC: float = 10.0
 
@@ -35,6 +36,8 @@ var _ignore_next_server_disconnect: bool = false
 # Spawner
 var _spawner: MultiplayerSpawner
 var _character_container: Node2D
+var _projectile_spawner: MultiplayerSpawner
+var _projectile_container: Node2D
 var _camera: Camera2D
 var _local_character: CharacterBase
 var _move_inputs_by_peer_id: Dictionary = {}
@@ -200,10 +203,12 @@ func _spawn_character(peer_id: int) -> void:
 
 	var spawn_count: int = _character_container.get_child_count()
 	var character_id: String = "warrior" if spawn_count % 2 == 0 else "mage"
+	var team_id: int = 1 if spawn_count % 2 == 0 else 2
 	var spawn_data: Dictionary = {
 		"peer_id": peer_id,
 		"position": Vector2(randf_range(100, 500), randf_range(100, 400)),
 		"character_id": character_id,
+		"team_id": team_id,
 	}
 	var character: Node = _spawner.spawn(spawn_data)
 	assert(character != null, "TestCombat: failed to spawn CharacterBase for peer %d" % peer_id)
@@ -289,7 +294,7 @@ func request_skill(skill_idx: int, direction: Vector2) -> void:
 		SkillData.Type.AOE:
 			_execute_aoe_skill(attacker, sender_id, skill)
 		SkillData.Type.PROJECTILE:
-			pass
+			_execute_projectile_skill(attacker, sender_id, skill, direction)
 
 
 func _execute_melee_skill(
@@ -325,11 +330,71 @@ func _execute_aoe_skill(attacker: CharacterBase, attacker_id: int, skill: SkillD
 			_apply_damage(attacker_id, int(target.name), target, skill)
 
 
+func _execute_projectile_skill(
+	attacker: CharacterBase, attacker_id: int, skill: SkillData, direction: Vector2
+) -> void:
+	var enemy_layer: int = 2 if attacker.team_id == 1 else 1
+	var spawn_data: Dictionary = {
+		"attacker_id": attacker_id,
+		"position": attacker.global_position,
+		"direction": direction,
+		"damage": skill.damage,
+		"speed": skill.projectile_speed,
+		"range": skill.range,
+		"skill_id": skill.id,
+		"collision_mask": enemy_layer,
+	}
+	_projectile_spawner.spawn(spawn_data)
+
+
+func _spawn_projectile_node(data: Variant) -> Node:
+	assert(data is Dictionary, "TestCombat: projectile spawn data must be a Dictionary")
+	var spawn_data: Dictionary = data
+
+	var projectile: Projectile = PROJECTILE_SCENE.instantiate() as Projectile
+	assert(projectile != null, "TestCombat: failed to instantiate Projectile scene")
+
+	projectile.attacker_id = spawn_data["attacker_id"]
+	projectile.damage = spawn_data["damage"]
+	projectile.skill_id = spawn_data["skill_id"]
+	projectile.position = spawn_data["position"]
+	projectile.setup(spawn_data["direction"], spawn_data["speed"], spawn_data["range"])
+	projectile.collision_layer = 0
+	projectile.collision_mask = spawn_data.get("collision_mask", 1)
+	projectile.set_multiplayer_authority(REFEREE_PEER_ID)
+	_setup_projectile_synchronizer(projectile)
+
+	var err: int = projectile.body_hit.connect(_on_projectile_body_hit)
+	assert(err == OK, "TestCombat: failed to connect projectile body_hit: %d" % err)
+
+	return projectile
+
+
+func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
+	var target: CharacterBase = body as CharacterBase
+	if target == null:
+		return
+	var target_id: int = int(target.name)
+	var dummy_skill := SkillData.new()
+	dummy_skill.damage = projectile.damage
+	dummy_skill.id = projectile.skill_id
+	_apply_damage(projectile.attacker_id, target_id, target, dummy_skill)
+
+
 func _apply_damage(
 	attacker_id: int, target_id: int, target: CharacterBase, skill: SkillData
 ) -> void:
 	target.hp = max(0, target.hp - skill.damage)
 	broadcast_hit_result.rpc(attacker_id, target_id, skill.damage, skill.id)
+	if target.hp <= 0:
+		_handle_character_death(target_id)
+
+
+func _handle_character_death(loser_id: int) -> void:
+	if _match_ended:
+		return
+	var winner_id: int = _find_first_active_peer_id_except(loser_id)
+	broadcast_match_ended.rpc("player eliminated", loser_id, winner_id)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -385,6 +450,17 @@ func _setup_ui() -> void:
 	_spawner.spawn_function = _spawn_character_node
 	add_child(_spawner)
 	_spawner.spawn_path = _character_container.get_path()
+
+	# --- Projectile Container + Spawner ---
+	_projectile_container = Node2D.new()
+	_projectile_container.name = "ProjectileContainer"
+	add_child(_projectile_container)
+
+	_projectile_spawner = MultiplayerSpawner.new()
+	_projectile_spawner.name = "ProjectileSpawner"
+	_projectile_spawner.spawn_function = _spawn_projectile_node
+	add_child(_projectile_spawner)
+	_projectile_spawner.spawn_path = _projectile_container.get_path()
 
 	# --- Debug Info Panel ---
 	_info_panel = PanelContainer.new()
@@ -663,6 +739,8 @@ func _spawn_character_node(data: Variant) -> Node:
 		CharacterDefinitions.warrior() if character_id == "warrior" else CharacterDefinitions.mage()
 	)
 	character_base.assign_character_data(char_data)
+	character_base.team_id = spawn_data.get("team_id", 1)
+	character_base.collision_layer = character_base.team_id
 
 	var spawn_position: Vector2 = spawn_data["position"]
 	character.set_multiplayer_authority(REFEREE_PEER_ID)
