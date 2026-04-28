@@ -39,6 +39,7 @@ var _camera: Camera2D
 var _local_character: CharacterBase
 var _move_inputs_by_peer_id: Dictionary = {}
 var _disconnect_deadlines_by_peer_id: Dictionary = {}
+var _skill_last_used_by_peer_id: Dictionary = {}
 var _last_sent_move_input: Vector2 = Vector2.ZERO
 var _has_sent_move_input: bool = false
 
@@ -71,6 +72,8 @@ func _process(_delta: float) -> void:
 
 	if _local_character == null:
 		_local_character = _find_local_character()
+		if _local_character != null:
+			_local_character.show_facing_indicator()
 	if _local_character == null:
 		return
 
@@ -210,6 +213,7 @@ func _spawn_character(peer_id: int) -> void:
 func _remove_character(peer_id: int) -> void:
 	_disconnect_deadlines_by_peer_id.erase(peer_id)
 	_move_inputs_by_peer_id.erase(peer_id)
+	_skill_last_used_by_peer_id.erase(peer_id)
 
 	for child in _character_container.get_children():
 		if child.name == str(peer_id):
@@ -246,6 +250,94 @@ func submit_move_input(input_vector: Vector2) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	_move_inputs_by_peer_id[sender_id] = input_vector.limit_length()
 	_disconnect_deadlines_by_peer_id.erase(sender_id)
+
+
+@rpc("any_peer", "reliable")
+func request_skill(skill_idx: int, direction: Vector2) -> void:
+	assert(_is_server, "TestCombat.request_skill must only run on referee")
+	assert(skill_idx >= 0 and skill_idx <= 2, "request_skill: invalid skill_idx %d" % skill_idx)
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var attacker: CharacterBase = _find_character_by_peer_id(sender_id)
+	if attacker == null:
+		return
+
+	var char_data: CharacterData = attacker.get("_character_data") as CharacterData
+	if char_data == null:
+		return
+
+	var skills: Array = [char_data.skill_1, char_data.skill_2, char_data.ultimate]
+	var skill: SkillData = skills[skill_idx] as SkillData
+	assert(skill != null, "request_skill: skill %d is null for peer %d" % [skill_idx, sender_id])
+
+	if not _skill_last_used_by_peer_id.has(sender_id):
+		_skill_last_used_by_peer_id[sender_id] = {}
+	var peer_cooldowns: Dictionary = _skill_last_used_by_peer_id[sender_id]
+	var now: float = _get_now_seconds()
+	if peer_cooldowns.has(skill_idx) and now - peer_cooldowns[skill_idx] < skill.cooldown:
+		return
+
+	if attacker.mp < skill.mp_cost:
+		return
+
+	attacker.mp -= skill.mp_cost
+	peer_cooldowns[skill_idx] = now
+
+	match skill.skill_type:
+		SkillData.Type.MELEE:
+			_execute_melee_skill(attacker, sender_id, skill, direction)
+		SkillData.Type.AOE:
+			_execute_aoe_skill(attacker, sender_id, skill)
+		SkillData.Type.PROJECTILE:
+			pass
+
+
+func _execute_melee_skill(
+	attacker: CharacterBase, attacker_id: int, skill: SkillData, _direction: Vector2
+) -> void:
+	var closest_target: CharacterBase = null
+	var closest_dist: float = skill.range
+
+	for child in _character_container.get_children():
+		var target: CharacterBase = child as CharacterBase
+		assert(target != null, "TestCombat: expected CharacterBase under CharacterContainer")
+		if target == attacker:
+			continue
+		var dist: float = attacker.global_position.distance_to(target.global_position)
+		if dist <= closest_dist:
+			closest_dist = dist
+			closest_target = target
+
+	if closest_target == null:
+		return
+
+	_apply_damage(attacker_id, int(closest_target.name), closest_target, skill)
+
+
+func _execute_aoe_skill(attacker: CharacterBase, attacker_id: int, skill: SkillData) -> void:
+	for child in _character_container.get_children():
+		var target: CharacterBase = child as CharacterBase
+		assert(target != null, "TestCombat: expected CharacterBase under CharacterContainer")
+		if target == attacker:
+			continue
+		var dist: float = attacker.global_position.distance_to(target.global_position)
+		if dist <= skill.range:
+			_apply_damage(attacker_id, int(target.name), target, skill)
+
+
+func _apply_damage(
+	attacker_id: int, target_id: int, target: CharacterBase, skill: SkillData
+) -> void:
+	target.hp = max(0, target.hp - skill.damage)
+	broadcast_hit_result.rpc(attacker_id, target_id, skill.damage, skill.id)
+
+
+@rpc("authority", "call_local", "reliable")
+func broadcast_hit_result(attacker_id: int, target_id: int, damage: int, skill_id: String) -> void:
+	var msg: String = (
+		"Peer %d hit peer %d for %d dmg [%s]" % [attacker_id, target_id, damage, skill_id]
+	)
+	_add_ping_log(-1, msg)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -379,6 +471,19 @@ func _ensure_player_hud() -> void:
 	_player_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(_player_hud)
 
+	var err: int = _player_hud.skill_pressed.connect(_on_skill_pressed)
+	assert(err == OK, "TestCombat: failed to connect skill_pressed: %d" % err)
+
+
+func _on_skill_pressed(skill_idx: int) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+	if _local_character == null:
+		return
+	request_skill.rpc_id(REFEREE_PEER_ID, skill_idx, _local_character.facing_direction)
+
 
 func _configure_manual_test_input() -> void:
 	Input.set_emulate_touch_from_mouse(true)
@@ -420,6 +525,8 @@ func _submit_local_move_input() -> void:
 		return
 
 	var input_vector: Vector2 = _get_local_move_input()
+	if _local_character != null:
+		_local_character.set_move_input(input_vector)
 	if _has_sent_move_input and input_vector == _last_sent_move_input:
 		return
 
@@ -518,12 +625,14 @@ func _setup_character_synchronizer(character: CharacterBody2D) -> void:
 	synchronizer.set_multiplayer_authority(REFEREE_PEER_ID)
 
 	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
-	var position_path: NodePath = NodePath(".:position")
-	replication_config.add_property(position_path)
-	replication_config.property_set_spawn(position_path, true)
-	replication_config.property_set_replication_mode(
-		position_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
-	)
+
+	for prop in [NodePath(".:position"), NodePath(".:hp")]:
+		replication_config.add_property(prop)
+		replication_config.property_set_spawn(prop, true)
+		replication_config.property_set_replication_mode(
+			prop, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		)
+
 	synchronizer.replication_config = replication_config
 
 	character.add_child(synchronizer, true)
