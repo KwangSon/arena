@@ -26,9 +26,7 @@ static func create_node(data: Dictionary, referee_peer_id: int) -> CharacterBase
 	assert(character_base != null, "CharacterSpawner: CharacterBody2D is not a CharacterBase")
 
 	var character_id: String = data.get("character_id", "warrior")
-	var char_data: CharacterData = (
-		CharacterDefinitions.warrior() if character_id == "warrior" else CharacterDefinitions.mage()
-	)
+	var char_data: CharacterData = CharacterDefinitions.create(character_id)
 	character_base.assign_character_data(char_data)
 	character_base.team_id = data.get("team_id", 1)
 	character_base.collision_layer = character_base.team_id

@@ -11,3 +11,5 @@ var bp_regen: float = 5.0
 var skill_1: SkillData
 var skill_2: SkillData
 var ultimate: SkillData
+var sprite_frames: SpriteFrames = null
+var default_animation: String = "idle_down"

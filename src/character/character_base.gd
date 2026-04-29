@@ -2,6 +2,8 @@ class_name CharacterBase
 
 extends CharacterBody2D
 
+enum AnimState { IDLE, RUN, ATTACK }
+
 const DIRECTION_LINE_LENGTH: float = 50.0
 const _TEAM_COLORS: Array[Color] = [
 	Color(0.5, 0.5, 0.5),  # team 0 (unassigned)
@@ -28,6 +30,7 @@ var team_id: int = 0
 var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
+var _anim_state: AnimState = AnimState.IDLE
 var _sprite: AnimatedSprite2D
 var _hp_bar: ProgressBar
 var _direction_line: Line2D
@@ -49,7 +52,12 @@ func _ready() -> void:
 	var team_color: Color = _TEAM_COLORS[clampi(team_id, 0, _TEAM_COLORS.size() - 1)]
 	_sprite.modulate = team_color
 
-	# Placeholder visual until sprite frames are added
+	var err := _sprite.animation_finished.connect(_on_animation_finished)
+	assert(err == OK, "CharacterBase: failed to connect animation_finished: %d" % err)
+
+	# assign_character_data may have been called before _ready — apply sprite now that _sprite is ready
+	_apply_sprite_frames()
+
 	if not _has_sprite_frames():
 		var placeholder: Polygon2D = Polygon2D.new()
 		placeholder.polygon = PackedVector2Array(
@@ -88,6 +96,17 @@ func assign_character_data(data: CharacterData) -> void:
 	hp = max_hp
 	mp = max_mp
 	bp = max_bp
+	# _sprite is null here when called before _ready; _ready will call _apply_sprite_frames again
+	_apply_sprite_frames()
+
+
+func _apply_sprite_frames() -> void:
+	if _sprite == null or _character_data == null or _character_data.sprite_frames == null:
+		return
+	_sprite.sprite_frames = _character_data.sprite_frames
+	var anim: String = _character_data.default_animation
+	if _sprite.sprite_frames.has_animation(anim):
+		_sprite.play(anim)
 
 
 func set_move_input(input_vector: Vector2) -> void:
@@ -96,6 +115,40 @@ func set_move_input(input_vector: Vector2) -> void:
 		facing_direction = _move_input.normalized()
 		if _direction_line != null:
 			_direction_line.set_point_position(1, facing_direction * DIRECTION_LINE_LENGTH)
+	_update_movement_animation()
+
+
+func play_attack_animation(anim_prefix: String) -> void:
+	if _sprite == null or _sprite.sprite_frames == null:
+		return
+	var anim_name := anim_prefix + "_" + _get_direction_suffix()
+	if not _sprite.sprite_frames.has_animation(anim_name):
+		return
+	_anim_state = AnimState.ATTACK
+	_sprite.play(anim_name)
+
+
+func _update_movement_animation() -> void:
+	if _sprite == null or _sprite.sprite_frames == null:
+		return
+	if _anim_state == AnimState.ATTACK:
+		return
+	var prefix := "run" if _move_input.length_squared() > 0.0 else "idle"
+	var anim_name := prefix + "_" + _get_direction_suffix()
+	if _sprite.sprite_frames.has_animation(anim_name) and _sprite.animation != anim_name:
+		_sprite.play(anim_name)
+
+
+func _get_direction_suffix() -> String:
+	if absf(facing_direction.x) >= absf(facing_direction.y):
+		return "right" if facing_direction.x >= 0.0 else "left"
+	return "down" if facing_direction.y >= 0.0 else "up"
+
+
+func _on_animation_finished() -> void:
+	if _anim_state == AnimState.ATTACK:
+		_anim_state = AnimState.IDLE
+		_update_movement_animation()
 
 
 func _has_sprite_frames() -> bool:

@@ -153,6 +153,4 @@ func _disconnect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 				if screen_node.return_to_lobby_requested.is_connected(
 					_on_return_to_lobby_requested
 				):
-					screen_node.return_to_lobby_requested.disconnect(
-						_on_return_to_lobby_requested
-					)
+					screen_node.return_to_lobby_requested.disconnect(_on_return_to_lobby_requested)

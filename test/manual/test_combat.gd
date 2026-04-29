@@ -288,14 +288,13 @@ func _get_spawn_position(spawn_count: int, team_id: int) -> Vector2:
 				return Vector2(150, 420)
 			_:
 				return Vector2(150, 250 + 120 * team_slot)
-	else:
-		match team_slot:
-			0:
-				return Vector2(650, 250)
-			1:
-				return Vector2(650, 420)
-			_:
-				return Vector2(650, 250 + 120 * team_slot)
+	match team_slot:
+		0:
+			return Vector2(650, 250)
+		1:
+			return Vector2(650, 420)
+		_:
+			return Vector2(650, 250 + 120 * team_slot)
 
 
 func _spawn_character(peer_id: int) -> void:
@@ -308,7 +307,7 @@ func _spawn_character(peer_id: int) -> void:
 			return
 
 	var spawn_count: int = _character_container.get_child_count()
-	var character_id: String = "warrior" if spawn_count % 2 == 0 else "mage"
+	var character_id: String = "knight" if spawn_count % 2 == 0 else "mage"
 	var team_id: int = 1 if spawn_count % 2 == 0 else 2
 	var position: Vector2 = _get_spawn_position(spawn_count, team_id)
 	var spawn_data: Dictionary = {
@@ -624,8 +623,10 @@ func _update_info() -> void:
 
 	print("=== Debug Info ===")
 	print(
-		"  Mode: %s | ID: %d | Clients: %d | Total instances: %d | Peers: %s"
-		% [mode, my_id, peer_count, total_instances, peers_str]
+		(
+			"  Mode: %s | ID: %d | Clients: %d | Total instances: %d | Peers: %s"
+			% [mode, my_id, peer_count, total_instances, peers_str]
+		)
 	)
 
 	_info_label.text = (
@@ -655,6 +656,12 @@ func _on_skill_pressed(skill_idx: int) -> void:
 		return
 	if _local_character == null:
 		return
+	var char_data: CharacterData = _local_character.get("_character_data") as CharacterData
+	if char_data != null:
+		var skills: Array = [char_data.skill_1, char_data.skill_2, char_data.ultimate]
+		var skill: SkillData = skills[skill_idx] as SkillData
+		if skill != null and skill.animation_name != "":
+			_local_character.play_attack_animation(skill.animation_name)
 	request_skill.rpc_id(REFEREE_PEER_ID, skill_idx, _local_character.facing_direction)
 
 

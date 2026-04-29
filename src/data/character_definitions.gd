@@ -1,6 +1,64 @@
 class_name CharacterDefinitions
 
 
+static func create(character_id: String) -> CharacterData:
+	match character_id:
+		"warrior":
+			return warrior()
+		"mage":
+			return mage()
+		"knight":
+			return knight()
+		_:
+			assert(false, "CharacterDefinitions.get: unknown character_id '%s'" % character_id)
+			return null
+
+
+static func knight() -> CharacterData:
+	var data := CharacterData.new()
+	data.id = "knight"
+	data.display_name = "기사"
+	data.max_hp = 130
+	data.max_mp = 80
+	data.max_bp = 100
+	data.move_speed = 290.0
+	data.sprite_frames = preload("res://asset/knight_sprite.tres")
+	data.default_animation = "idle_down"
+
+	var slash := SkillData.new()
+	slash.id = "knight_slash"
+	slash.display_name = "검격"
+	slash.skill_type = SkillData.Type.MELEE
+	slash.damage = 28
+	slash.range = 80.0
+	slash.cooldown = 1.0
+	slash.animation_name = "attack1"
+
+	var shield_bash := SkillData.new()
+	shield_bash.id = "shield_bash"
+	shield_bash.display_name = "방패치기"
+	shield_bash.skill_type = SkillData.Type.MELEE
+	shield_bash.damage = 15
+	shield_bash.range = 70.0
+	shield_bash.cooldown = 4.0
+	shield_bash.animation_name = "attack2"
+
+	var blade_storm := SkillData.new()
+	blade_storm.id = "blade_storm"
+	blade_storm.display_name = "블레이드 스톰"
+	blade_storm.skill_type = SkillData.Type.AOE
+	blade_storm.damage = 70
+	blade_storm.range = 110.0
+	blade_storm.cooldown = 12.0
+	blade_storm.mp_cost = 50
+	blade_storm.animation_name = "attack1"
+
+	data.skill_1 = slash
+	data.skill_2 = shield_bash
+	data.ultimate = blade_storm
+	return data
+
+
 static func warrior() -> CharacterData:
 	var data := CharacterData.new()
 	data.id = "warrior"

@@ -10,3 +10,4 @@ var range: float
 var cooldown: float
 var mp_cost: int = 0
 var projectile_speed: float = 0.0
+var animation_name: String = ""
