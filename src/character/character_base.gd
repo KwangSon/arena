@@ -40,9 +40,9 @@ func _ready() -> void:
 	_hp_bar = get_node("HPBar") as ProgressBar
 	assert(_hp_bar != null, "CharacterBase: HPBar node missing")
 	_hp_bar.show_percentage = false
-	_hp_bar.custom_minimum_size = Vector2(40, 6)
-	_hp_bar.size = Vector2(40, 6)
-	_hp_bar.position = Vector2(-20, -32)
+	_hp_bar.custom_minimum_size = Vector2(80, 8)
+	_hp_bar.size = Vector2(80, 8)
+	_hp_bar.position = Vector2(-40, -56)
 	_hp_bar.max_value = max_hp
 	_hp_bar.value = hp
 
@@ -54,10 +54,10 @@ func _ready() -> void:
 		var placeholder: Polygon2D = Polygon2D.new()
 		placeholder.polygon = PackedVector2Array(
 			[
-				Vector2(-15, -20),
-				Vector2(15, -20),
-				Vector2(15, 20),
-				Vector2(-15, 20),
+				Vector2(-48, -48),
+				Vector2(48, -48),
+				Vector2(48, 48),
+				Vector2(-48, 48),
 			]
 		)
 		placeholder.color = team_color
