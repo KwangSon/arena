@@ -278,6 +278,26 @@ func _on_server_disconnected() -> void:
 # ============================================================
 
 
+func _get_spawn_position(spawn_count: int, team_id: int) -> Vector2:
+	var team_slot: int = spawn_count / 2
+	if team_id == 1:
+		match team_slot:
+			0:
+				return Vector2(150, 250)
+			1:
+				return Vector2(150, 420)
+			_:
+				return Vector2(150, 250 + 120 * team_slot)
+	else:
+		match team_slot:
+			0:
+				return Vector2(650, 250)
+			1:
+				return Vector2(650, 420)
+			_:
+				return Vector2(650, 250 + 120 * team_slot)
+
+
 func _spawn_character(peer_id: int) -> void:
 	if not _is_server:
 		return
@@ -290,15 +310,16 @@ func _spawn_character(peer_id: int) -> void:
 	var spawn_count: int = _character_container.get_child_count()
 	var character_id: String = "warrior" if spawn_count % 2 == 0 else "mage"
 	var team_id: int = 1 if spawn_count % 2 == 0 else 2
+	var position: Vector2 = _get_spawn_position(spawn_count, team_id)
 	var spawn_data: Dictionary = {
 		"peer_id": peer_id,
-		"position": Vector2(randf_range(100, 500), randf_range(100, 400)),
+		"position": position,
 		"character_id": character_id,
 		"team_id": team_id,
 	}
 	var character: Node = _spawner.spawn(spawn_data)
 	assert(character != null, "TestCombat: failed to spawn CharacterBase for peer %d" % peer_id)
-	print("[Spawner] Spawned %s for peer %d" % [character_id, peer_id])
+	print("[Spawner] Spawned %s for peer %d at %s" % [character_id, peer_id, position])
 
 
 func _remove_character(peer_id: int) -> void:
@@ -569,6 +590,16 @@ func _find_first_peer_id_except(excluded_peer_id: int) -> int:
 	return -1
 
 
+func _get_connected_client_count() -> int:
+	if multiplayer.multiplayer_peer == null:
+		return 0
+	return multiplayer.get_peers().size()
+
+
+func _get_total_instance_count() -> int:
+	return _get_connected_client_count() + 1
+
+
 # ============================================================
 # UI
 # ============================================================
@@ -578,23 +609,28 @@ func _update_info() -> void:
 	var mode: String = "REFEREE (Server)" if _is_server else "PLAYER (Client)"
 	var my_id: int = 0
 	var peer_count: int = 0
+	var total_instances: int = 1
 	var peers_str: String = "none"
 
 	if multiplayer.multiplayer_peer != null:
 		my_id = multiplayer.get_unique_id()
 		var peers: PackedInt32Array = multiplayer.get_peers()
 		peer_count = peers.size()
+		total_instances = _get_total_instance_count()
 		var arr: PackedStringArray = []
 		for peer_id in peers:
 			arr.append(str(peer_id))
 		peers_str = ", ".join(arr)
 
 	print("=== Debug Info ===")
-	print("  Mode: %s | ID: %d | Peers (%d): %s" % [mode, my_id, peer_count, peers_str])
+	print(
+		"  Mode: %s | ID: %d | Clients: %d | Total instances: %d | Peers: %s"
+		% [mode, my_id, peer_count, total_instances, peers_str]
+	)
 
 	_info_label.text = (
-		"=== Debug Info ===\nMode: %s\nMy ID: %d\nPeers (%d): %s"
-		% [mode, my_id, peer_count, peers_str]
+		"=== Debug Info ===\nMode: %s\nMy ID: %d\nClients: %d\nTotal instances: %d\nPeers: %s"
+		% [mode, my_id, peer_count, total_instances, peers_str]
 	)
 
 

@@ -414,32 +414,91 @@ var projectile_speed: float = 0.0  # 0 = melee/AOE
 
 ### CardData
 
-Cards provide passive effects that trigger probabilistically during combat. **The referee rolls all RNG** to prevent client-side cheating.
+Cards are equipped before the match and trigger passively during combat. **The referee rolls all RNG** to prevent client-side cheating.
 
 ```gdscript
 class_name CardData extends Resource
 
+enum TriggerEvent {
+    ON_HIT,       # fires when this player deals damage
+    ON_TAKE_HIT,  # fires when this player receives damage
+    PASSIVE,      # applied once at character spawn (stat modifier)
+}
+
+enum EffectType {
+    # ON_HIT effects
+    CRITICAL_HIT,    # prob% → damage × 2
+    LIFESTEAL,       # prob% → heal attacker by effect_value% of damage dealt
+    EXTRA_DAMAGE,    # prob% → damage += base_damage × effect_value
+
+    # ON_TAKE_HIT effects
+    DODGE,           # prob% → negate all incoming damage
+    THORNS,          # always → reflect effect_value% of incoming damage to attacker
+
+    # PASSIVE effects (applied at spawn, no probability roll)
+    MOVE_SPEED_BONUS,     # move_speed *= (1 + effect_value)
+    MP_REGEN_BONUS,       # mp_regen  *= (1 + effect_value)
+    COOLDOWN_REDUCTION,   # stored on CharacterBase; SkillExecutor reads it per-cast
+}
+
 var id: String
 var display_name: String
 var description: String
-var rarity: Enums.CardRarity          # COMMON, RARE, EPIC, LEGENDARY
 
-# Effect
-var effect_type: Enums.CardEffect
-var effect_value: float               # e.g., 0.2 = +20% damage
-var trigger_probability: float        # e.g., 0.3 = 30% chance, rolled by referee
+var trigger_event: TriggerEvent
+var effect_type: EffectType
+var effect_value: float        # multiplier or ratio; semantics depend on effect_type
+var trigger_probability: float # 0.0–1.0; PASSIVE cards ignore this field
 
-# Shop
-var cost: int
+var cost: int                  # shop price
 ```
 
-**Card effect types:**
-- `EXTRA_DAMAGE` — bonus damage on hit
-- `LIFESTEAL` — heal % of damage dealt
-- `CRITICAL_HIT` — chance for 2x damage
-- `DODGE` — chance to nullify incoming damage
-- `MP_REGEN_BONUS` — increased MP regen
-- `COOLDOWN_REDUCTION` — reduced skill cooldowns
+**Built-in card examples** (defined in `card_definitions.gd`):
+
+| Card | Trigger | Prob | Effect |
+|---|---|---|---|
+| Critical Strike | ON_HIT | 20% | damage × 2 |
+| Lifesteal | ON_HIT | 30% | heal 25% of damage dealt |
+| Extra Damage | ON_HIT | 40% | +30% bonus damage |
+| Dodge | ON_TAKE_HIT | 25% | negate all damage |
+| Thorns | ON_TAKE_HIT | 100% | reflect 15% back to attacker |
+| Speed Demon | PASSIVE | — | move_speed +20% |
+| Regen Boost | PASSIVE | — | mp_regen +100% |
+
+### HitResult
+
+Returned by `CardProcessor.resolve_hit()`. Packages everything `SkillExecutor._apply_damage` needs after card resolution.
+
+```gdscript
+class_name HitResult extends RefCounted
+
+var final_damage: int      # damage applied to target (0 if dodged)
+var heal_amount: int       # HP restored to attacker (lifesteal)
+var reflected_damage: int  # damage applied back to attacker (thorns)
+var was_dodged: bool
+var was_critical: bool
+```
+
+### CardProcessor
+
+Stateless helper called exclusively on the referee. All `randf()` calls live here so RNG is server-authoritative.
+
+```gdscript
+class_name CardProcessor
+
+static func resolve_hit(
+    base_damage: int,
+    attacker_cards: Array[CardData],
+    target_cards: Array[CardData],
+) -> HitResult:
+    # 1. Apply ON_HIT cards (crit, lifesteal, extra damage)
+    # 2. Apply ON_TAKE_HIT cards (dodge cancels damage; thorns add reflected)
+    # Returns fully resolved HitResult
+
+static func apply_passive_cards(character: CharacterBase, cards: Array[CardData]) -> void:
+    # Called once per character at spawn.
+    # Modifies move_speed, mp_regen, cooldown_reduction on CharacterBase.
+```
 
 ### GameState
 
