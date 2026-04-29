@@ -20,6 +20,10 @@ config/icon="res://icon.svg"
 Nakama="*uid://cxuvjuyos0vhy"
 ScreenManager="*uid://coc6nwadugq8v"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg", "res://addons/virtual_joystick/plugin.cfg")
+
 [input_devices]
 
 pointing/emulate_touch_from_mouse=true
