@@ -32,6 +32,7 @@ static func create_node(data: Dictionary, referee_peer_id: int) -> CharacterBase
 	character_base.assign_character_data(char_data)
 	character_base.team_id = data.get("team_id", 1)
 	character_base.collision_layer = character_base.team_id
+	character_base.collision_mask = 1 | 2
 
 	character.set_multiplayer_authority(referee_peer_id)
 	character.name = str(data["peer_id"])
