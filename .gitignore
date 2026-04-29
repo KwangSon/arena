@@ -6,3 +6,6 @@
 # Per-user symlink to Godot binary (see docs/setup.md)
 /godot
 
+# Nakama full source (reference only, not tracked)
+/src-nakama/
+
