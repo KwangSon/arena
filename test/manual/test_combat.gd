@@ -318,6 +318,11 @@ func _spawn_character(peer_id: int) -> void:
 	}
 	var character: Node = _spawner.spawn(spawn_data)
 	assert(character != null, "TestCombat: failed to spawn CharacterBase for peer %d" % peer_id)
+
+	var char_base: CharacterBase = character as CharacterBase
+	assert(char_base != null, "TestCombat: spawned node is not a CharacterBase")
+	_equip_demo_cards(char_base, character_id)
+
 	print("[Spawner] Spawned %s for peer %d at %s" % [character_id, peer_id, position])
 
 
@@ -338,6 +343,23 @@ func _remove_character(peer_id: int) -> void:
 func _spawn_character_node(data: Variant) -> Node:
 	assert(data is Dictionary, "TestCombat: spawn data must be a Dictionary")
 	return CharacterSpawner.create_node(data, REFEREE_PEER_ID)
+
+
+## 데모용 카드 장착. knight는 주무기+갑옷, mage는 신발+궁극기.
+func _equip_demo_cards(character: CharacterBase, character_id: String) -> void:
+	if character_id == "knight":
+		character.equip_card(CardDefinitions.get_main_weapon())
+		character.equip_card(CardDefinitions.get_armor())
+	else:
+		character.equip_card(CardDefinitions.get_shoes())
+		character.equip_card(CardDefinitions.get_ultimate())
+	character.apply_equipped_cards()
+
+	var slot_names: Array[String] = []
+	for slot in character.equipped_cards.keys():
+		var card: CardData = character.equipped_cards[slot] as CardData
+		slot_names.append(card.display_name)
+	print("[Cards] %s equipped: %s" % [character_id, ", ".join(slot_names)])
 
 
 # ============================================================

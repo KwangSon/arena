@@ -27,6 +27,9 @@ var is_dashing: bool = false
 var facing_direction: Vector2 = Vector2.RIGHT
 var team_id: int = 0
 
+var equipped_cards: Dictionary = {}
+var damage_reduction: float = 0.0
+
 var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
@@ -82,6 +85,27 @@ func _ready() -> void:
 
 func show_facing_indicator() -> void:
 	_direction_line.visible = true
+
+
+func equip_card(card: CardData) -> void:
+	assert(card != null, "CharacterBase.equip_card: card is null")
+	equipped_cards[card.slot] = card
+
+
+func apply_equipped_cards() -> void:
+	var armor: CardData = equipped_cards.get(CardData.Slot.ARMOR) as CardData
+	if armor != null:
+		max_hp += armor.max_hp_bonus
+		hp = min(hp + armor.max_hp_bonus, max_hp)
+		damage_reduction = armor.damage_reduction
+		if _hp_bar != null:
+			_hp_bar.max_value = max_hp
+			_hp_bar.value = hp
+
+	var shoes: CardData = equipped_cards.get(CardData.Slot.SHOES) as CardData
+	if shoes != null:
+		_move_speed *= shoes.move_speed_mult
+		bp_regen *= shoes.bp_regen_mult
 
 
 func assign_character_data(data: CharacterData) -> void:

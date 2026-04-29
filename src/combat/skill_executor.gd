@@ -32,21 +32,28 @@ func try_execute_skill(
 		_skill_last_used[attacker_id] = {}
 	var peer_cooldowns: Dictionary = _skill_last_used[attacker_id]
 	var now: float = Time.get_ticks_msec() / 1000.0
-	if peer_cooldowns.has(skill_idx) and now - peer_cooldowns[skill_idx] < skill.cooldown:
-		return
-	if attacker.mp < skill.mp_cost:
+
+	var card_slot: CardData.Slot = _skill_idx_to_card_slot(skill_idx)
+	var card: CardData = attacker.equipped_cards.get(card_slot) as CardData
+
+	var effective_cooldown: float = skill.cooldown * (card.cooldown_mult if card != null else 1.0)
+	if peer_cooldowns.has(skill_idx) and now - peer_cooldowns[skill_idx] < effective_cooldown:
 		return
 
-	attacker.mp -= skill.mp_cost
+	var effective_mp_cost: int = int(skill.mp_cost * (card.mp_cost_mult if card != null else 1.0))
+	if attacker.mp < effective_mp_cost:
+		return
+
+	attacker.mp -= effective_mp_cost
 	peer_cooldowns[skill_idx] = now
 
 	match skill.skill_type:
 		SkillData.Type.MELEE:
-			_execute_melee(attacker, attacker_id, skill)
+			_execute_melee(attacker, attacker_id, skill, card_slot)
 		SkillData.Type.AOE:
-			_execute_aoe(attacker, attacker_id, skill)
+			_execute_aoe(attacker, attacker_id, skill, card_slot)
 		SkillData.Type.PROJECTILE:
-			_execute_projectile(attacker, attacker_id, skill, direction)
+			_execute_projectile(attacker, attacker_id, skill, direction, card_slot)
 
 
 func clear_peer(peer_id: int) -> void:
@@ -76,7 +83,9 @@ func create_projectile_node(data: Variant) -> Node:
 	return projectile
 
 
-func _execute_melee(attacker: CharacterBase, attacker_id: int, skill: SkillData) -> void:
+func _execute_melee(
+	attacker: CharacterBase, attacker_id: int, skill: SkillData, card_slot: CardData.Slot
+) -> void:
 	var closest_target: CharacterBase = null
 	var closest_dist: float = skill.range
 
@@ -92,10 +101,12 @@ func _execute_melee(attacker: CharacterBase, attacker_id: int, skill: SkillData)
 
 	if closest_target == null:
 		return
-	_apply_damage(attacker_id, int(closest_target.name), closest_target, skill)
+	_apply_damage(attacker_id, int(closest_target.name), closest_target, skill, attacker, card_slot)
 
 
-func _execute_aoe(attacker: CharacterBase, attacker_id: int, skill: SkillData) -> void:
+func _execute_aoe(
+	attacker: CharacterBase, attacker_id: int, skill: SkillData, card_slot: CardData.Slot
+) -> void:
 	for child in _character_container.get_children():
 		var target: CharacterBase = child as CharacterBase
 		assert(target != null, "SkillExecutor: expected CharacterBase under CharacterContainer")
@@ -103,12 +114,21 @@ func _execute_aoe(attacker: CharacterBase, attacker_id: int, skill: SkillData) -
 			continue
 		var dist: float = attacker.global_position.distance_to(target.global_position)
 		if dist <= skill.range:
-			_apply_damage(attacker_id, int(target.name), target, skill)
+			_apply_damage(attacker_id, int(target.name), target, skill, attacker, card_slot)
 
 
 func _execute_projectile(
-	attacker: CharacterBase, attacker_id: int, skill: SkillData, direction: Vector2
+	attacker: CharacterBase,
+	attacker_id: int,
+	skill: SkillData,
+	direction: Vector2,
+	card_slot: CardData.Slot,
 ) -> void:
+	var card: CardData = attacker.equipped_cards.get(card_slot) as CardData
+	var effective_damage: int = (
+		int(skill.damage * card.damage_mult) if card != null else skill.damage
+	)
+
 	var enemy_layer: int = 2 if attacker.team_id == 1 else 1
 	(
 		_projectile_spawner
@@ -117,7 +137,7 @@ func _execute_projectile(
 				"attacker_id": attacker_id,
 				"position": attacker.global_position,
 				"direction": direction,
-				"damage": skill.damage,
+				"damage": effective_damage,
 				"speed": skill.projectile_speed,
 				"range": skill.range,
 				"skill_id": skill.id,
@@ -138,12 +158,35 @@ func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
 
 
 func _apply_damage(
-	attacker_id: int, target_id: int, target: CharacterBase, skill: SkillData
+	attacker_id: int,
+	target_id: int,
+	target: CharacterBase,
+	skill: SkillData,
+	attacker: CharacterBase = null,
+	card_slot: CardData.Slot = CardData.Slot.MAIN_WEAPON,
 ) -> void:
-	target.hp = max(0, target.hp - skill.damage)
-	hit_occurred.emit(attacker_id, target_id, skill.damage, skill.id)
+	var raw_damage: int = skill.damage
+	if attacker != null:
+		var card: CardData = attacker.equipped_cards.get(card_slot) as CardData
+		if card != null:
+			raw_damage = int(raw_damage * card.damage_mult)
+	var final_damage: int = max(0, int(raw_damage * (1.0 - target.damage_reduction)))
+	target.hp = max(0, target.hp - final_damage)
+	hit_occurred.emit(attacker_id, target_id, final_damage, skill.id)
 	if target.hp <= 0:
 		character_died.emit(target_id, _find_first_alive_except(target_id))
+
+
+func _skill_idx_to_card_slot(skill_idx: int) -> CardData.Slot:
+	match skill_idx:
+		0:
+			return CardData.Slot.MAIN_WEAPON
+		1:
+			return CardData.Slot.SUB_WEAPON
+		2:
+			return CardData.Slot.ULTIMATE
+	assert(false, "SkillExecutor._skill_idx_to_card_slot: unknown skill_idx %d" % skill_idx)
+	return CardData.Slot.MAIN_WEAPON
 
 
 func _find_first_alive_except(excluded_id: int) -> int:
