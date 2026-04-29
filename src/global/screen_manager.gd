@@ -1,7 +1,6 @@
 ## Autoload — 화면 전환 관리자.
 ## add_child / queue_free 패턴으로 화면을 동적으로 교체한다.
 ## Referee 모드에서는 화면을 생성하지 않는다.
-class_name ScreenManager
 extends Node2D
 
 ## 화면 전환이 완료되었을 때 발생한다.
@@ -70,10 +69,9 @@ func _create_screen(target: Screen) -> Node:
 
 
 func _create_lobby_screen() -> Node:
-	# TODO: LobbyScreen 구현 후 교체
-	var placeholder: Node2D = Node2D.new()
-	placeholder.name = "LobbyScreen"
-	return placeholder
+	var screen: LobbyScreen = LobbyScreen.new()
+	screen.name = "LobbyScreen"
+	return screen
 
 
 func _create_game_screen() -> Node:
