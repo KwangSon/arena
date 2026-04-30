@@ -6,12 +6,13 @@ extends Node2D
 ## 화면 전환이 완료되었을 때 발생한다.
 signal screen_changed(from_screen: Screen, to_screen: Screen)
 
-## 로비에서 매치가 확정되어 게임 노드를 만들어야 할 때 발생한다.
-signal game_ready(host: String, port: int, match_id: String)
+## 캐릭터 선택까지 완료되어 게임 노드를 만들어야 할 때 발생한다.
+signal game_ready(host: String, port: int, match_id: String, character_id: String)
 
 enum Screen {
 	NONE,
 	LOBBY,
+	CHARACTER_SELECT,
 	GAME,
 	RESULT,
 }
@@ -21,6 +22,11 @@ var current_screen: Screen = Screen.NONE
 
 ## 현재 활성 화면 노드. null이면 화면 없음.
 var _current_screen_node: Node = null
+
+## 캐릭터 선택 화면으로 넘기기 위해 임시 보관.
+var _pending_host: String = ""
+var _pending_port: int = 0
+var _pending_match_id: String = ""
 
 
 ## 화면을 전환한다.
@@ -62,6 +68,8 @@ func _create_screen(target: Screen) -> Node:
 	match target:
 		Screen.LOBBY:
 			return _create_lobby_screen()
+		Screen.CHARACTER_SELECT:
+			return _create_character_select_screen()
 		Screen.GAME:
 			return _create_game_screen()
 		Screen.RESULT:
@@ -77,6 +85,12 @@ func _create_lobby_screen() -> Node:
 	return screen
 
 
+func _create_character_select_screen() -> Node:
+	var screen: Node = (preload("res://src/screen/character_select_screen.gd") as GDScript).new()
+	screen.name = "CharacterSelectScreen"
+	return screen
+
+
 func _create_game_screen() -> Node:
 	# TODO: GameScreen 구현 후 교체
 	var placeholder: Node2D = Node2D.new()
@@ -85,7 +99,7 @@ func _create_game_screen() -> Node:
 
 
 func _create_result_screen() -> Node:
-	var screen: ResultScreen = ResultScreen.new()
+	var screen: Node = (preload("res://src/screen/result_screen.gd") as GDScript).new()
 	screen.name = "ResultScreen"
 	return screen
 
@@ -101,6 +115,10 @@ func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 			if screen_node.has_signal("match_found"):
 				var err: int = screen_node.match_found.connect(_on_match_found)
 				assert(err == OK, "ScreenManager: failed to connect match_found: %d" % err)
+		Screen.CHARACTER_SELECT:
+			if screen_node.has_signal("character_chosen"):
+				var err: int = screen_node.character_chosen.connect(_on_character_chosen)
+				assert(err == OK, "ScreenManager: failed to connect character_chosen: %d" % err)
 		Screen.RESULT:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				var err: int = screen_node.return_to_lobby_requested.connect(
@@ -118,8 +136,15 @@ func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 
 
 func _on_match_found(host: String, port: int, match_id: String) -> void:
+	_pending_host = host
+	_pending_port = port
+	_pending_match_id = match_id
+	change_screen(Screen.CHARACTER_SELECT)
+
+
+func _on_character_chosen(character_id: String) -> void:
 	_cleanup_current_screen()
-	game_ready.emit(host, port, match_id)
+	game_ready.emit(_pending_host, _pending_port, _pending_match_id, character_id)
 
 
 func _on_return_to_lobby_requested() -> void:
@@ -151,6 +176,10 @@ func _disconnect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 			if screen_node.has_signal("match_found"):
 				if screen_node.match_found.is_connected(_on_match_found):
 					screen_node.match_found.disconnect(_on_match_found)
+		Screen.CHARACTER_SELECT:
+			if screen_node.has_signal("character_chosen"):
+				if screen_node.character_chosen.is_connected(_on_character_chosen):
+					screen_node.character_chosen.disconnect(_on_character_chosen)
 		Screen.RESULT:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				if screen_node.return_to_lobby_requested.is_connected(

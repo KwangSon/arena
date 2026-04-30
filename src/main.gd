@@ -25,12 +25,13 @@ func _start_referee() -> void:
 	add_child(session)
 
 
-func _on_game_ready(host: String, port: int, match_id: String) -> void:
+func _on_game_ready(host: String, port: int, match_id: String, character_id: String) -> void:
 	var session: MatchSession = MatchSession.new()
 	session.name = "MatchSession"
 	session._referee_host = host
 	session._referee_port = port
 	session._match_id = match_id
+	session._character_id = character_id
 	var err: int = session.match_completed.connect(_on_match_completed.bind(session))
 	assert(err == OK, "Main: failed to connect match_completed: %d" % err)
 	add_child(session)

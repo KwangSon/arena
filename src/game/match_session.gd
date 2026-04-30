@@ -13,6 +13,7 @@ var _referee_host: String = "localhost"
 var _referee_port: int = 7777
 var _match_id: String = ""
 var _orchestrator_url: String = ""
+var _character_id: String = ""
 
 var _match_ended: bool = false
 
@@ -234,6 +235,7 @@ func _on_connected_to_server() -> void:
 	print("[MatchSession] Connected to referee — my id: %d" % multiplayer.get_unique_id())
 	_ensure_player_hud()
 	_update_info()
+	request_character.rpc_id(REFEREE_PEER_ID, _character_id)
 
 
 func _on_connection_failed() -> void:
@@ -250,6 +252,12 @@ func _on_server_disconnected() -> void:
 # ============================================================
 # RPCs
 # ============================================================
+
+@rpc("any_peer", "reliable")
+func request_character(character_id: String) -> void:
+	assert(_is_server, "MatchSession.request_character must only run on referee")
+	_referee_manager.set_character_choice(multiplayer.get_remote_sender_id(), character_id)
+
 
 @rpc("any_peer", "reliable")
 func request_dash() -> void:

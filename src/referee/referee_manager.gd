@@ -89,8 +89,10 @@ func on_peer_connected(peer_id: int) -> void:
 	if _disconnect_deadlines.has(peer_id):
 		_disconnect_deadlines.erase(peer_id)
 		_move_inputs[peer_id] = Vector2.ZERO
-		return
-	_spawn_character(peer_id)
+
+
+func set_character_choice(peer_id: int, character_id: String) -> void:
+	_spawn_character(peer_id, character_id)
 
 
 func on_peer_disconnected(peer_id: int) -> void:
@@ -178,13 +180,14 @@ func remove_character(peer_id: int) -> void:
 # ============================================================
 
 
-func _spawn_character(peer_id: int) -> void:
+func _spawn_character(peer_id: int, character_id: String = "") -> void:
 	for child in _character_container.get_children():
 		if child.name == str(peer_id):
 			return
 	var spawn_count: int = _character_container.get_child_count()
-	var character_id: String = "knight" if spawn_count % 2 == 0 else "mage"
 	var team_id: int = 1 if spawn_count % 2 == 0 else 2
+	if character_id.is_empty():
+		character_id = "knight" if spawn_count % 2 == 0 else "mage"
 	var position: Vector2 = _get_spawn_position(spawn_count, team_id)
 	var spawn_data: Dictionary = {
 		"peer_id": peer_id,
