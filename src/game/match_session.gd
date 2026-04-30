@@ -4,6 +4,7 @@ class_name MatchSession extends Node2D
 signal match_completed(reason: String, loser_id: int, winner_id: int)
 
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
+const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
 const REFEREE_PEER_ID: int = 1
 const MAX_CLIENTS: int = 8
 
@@ -132,6 +133,7 @@ func _setup_scene() -> void:
 	_projectile_spawner.name = "ProjectileSpawner"
 	add_child(_projectile_spawner)
 	_projectile_spawner.spawn_path = _projectile_container.get_path()
+	_projectile_spawner.spawn_function = _spawn_projectile_node
 
 	var info_panel := PanelContainer.new()
 	info_panel.custom_minimum_size = Vector2(320, 50)
@@ -361,6 +363,41 @@ func _get_local_move_input() -> Vector2:
 # ============================================================
 # Helpers
 # ============================================================
+
+
+func _spawn_projectile_node(data: Variant) -> Node:
+	assert(data is Dictionary, "MatchSession: projectile spawn data must be Dictionary")
+	var spawn_data: Dictionary = data
+	var projectile: Projectile = PROJECTILE_SCENE.instantiate() as Projectile
+	assert(projectile != null, "MatchSession: failed to instantiate Projectile scene")
+	projectile.attacker_id = spawn_data["attacker_id"]
+	projectile.damage = spawn_data["damage"]
+	projectile.skill_id = spawn_data["skill_id"]
+	projectile.position = spawn_data["position"]
+	projectile.setup(spawn_data["direction"], spawn_data["speed"], spawn_data["range"])
+	projectile.collision_layer = 0
+	projectile.collision_mask = spawn_data.get("collision_mask", 1)
+	projectile.set_multiplayer_authority(REFEREE_PEER_ID)
+	_add_projectile_synchronizer(projectile)
+	return projectile
+
+
+func _add_projectile_synchronizer(projectile: Node2D) -> void:
+	var synchronizer: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
+	synchronizer.name = "StateSynchronizer"
+	synchronizer.root_path = NodePath("..")
+	synchronizer.replication_interval = 0.0
+	synchronizer.delta_interval = 0.0
+	synchronizer.set_multiplayer_authority(REFEREE_PEER_ID)
+	var replication_config: SceneReplicationConfig = SceneReplicationConfig.new()
+	var pos_path := NodePath(".:position")
+	replication_config.add_property(pos_path)
+	replication_config.property_set_spawn(pos_path, true)
+	replication_config.property_set_replication_mode(
+		pos_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+	synchronizer.replication_config = replication_config
+	projectile.add_child(synchronizer, true)
 
 
 func _spawn_character_node(data: Variant) -> Node:
