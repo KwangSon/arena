@@ -6,6 +6,9 @@ extends Node2D
 ## 화면 전환이 완료되었을 때 발생한다.
 signal screen_changed(from_screen: Screen, to_screen: Screen)
 
+## 로비에서 매치가 확정되어 게임 노드를 만들어야 할 때 발생한다.
+signal game_ready(host: String, port: int, match_id: String)
+
 enum Screen {
 	NONE,
 	LOBBY,
@@ -96,9 +99,9 @@ func _create_result_screen() -> Node:
 func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 	match screen_type:
 		Screen.LOBBY:
-			if screen_node.has_signal("match_requested"):
-				var err: int = screen_node.match_requested.connect(_on_match_requested)
-				assert(err == OK, "ScreenManager: failed to connect match_requested: %d" % err)
+			if screen_node.has_signal("match_found"):
+				var err: int = screen_node.match_found.connect(_on_match_found)
+				assert(err == OK, "ScreenManager: failed to connect match_found: %d" % err)
 		Screen.RESULT:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				var err: int = screen_node.return_to_lobby_requested.connect(
@@ -115,8 +118,9 @@ func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 # ============================================================
 
 
-func _on_match_requested() -> void:
-	change_screen(Screen.GAME)
+func _on_match_found(host: String, port: int, match_id: String) -> void:
+	_cleanup_current_screen()
+	game_ready.emit(host, port, match_id)
 
 
 func _on_return_to_lobby_requested() -> void:
@@ -145,9 +149,9 @@ func _cleanup_current_screen() -> void:
 func _disconnect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 	match screen_type:
 		Screen.LOBBY:
-			if screen_node.has_signal("match_requested"):
-				if screen_node.match_requested.is_connected(_on_match_requested):
-					screen_node.match_requested.disconnect(_on_match_requested)
+			if screen_node.has_signal("match_found"):
+				if screen_node.match_found.is_connected(_on_match_found):
+					screen_node.match_found.disconnect(_on_match_found)
 		Screen.RESULT:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				if screen_node.return_to_lobby_requested.is_connected(

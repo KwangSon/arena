@@ -5,7 +5,7 @@ var _is_referee: bool = false
 
 
 func _ready() -> void:
-	_is_referee = "--mode=referee" in OS.get_cmdline_args()
+	_is_referee = "--mode=referee" in OS.get_cmdline_user_args()
 
 	if _is_referee:
 		_start_referee()
@@ -14,9 +14,21 @@ func _ready() -> void:
 
 
 func _start_player() -> void:
+	var err: int = ScreenManager.game_ready.connect(_on_game_ready)
+	assert(err == OK, "Main: failed to connect game_ready: %d" % err)
 	ScreenManager.change_screen(ScreenManager.Screen.LOBBY)
 
 
 func _start_referee() -> void:
-	# TODO: RefereeManager 초기화
-	print("[Main] Referee mode — no screens")
+	var session: MatchSession = MatchSession.new()
+	session.name = "MatchSession"
+	add_child(session)
+
+
+func _on_game_ready(host: String, port: int, match_id: String) -> void:
+	var session: MatchSession = MatchSession.new()
+	session.name = "MatchSession"
+	session._referee_host = host
+	session._referee_port = port
+	session._match_id = match_id
+	add_child(session)

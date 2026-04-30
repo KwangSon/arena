@@ -10,8 +10,8 @@ from pydantic import BaseModel
 
 app = FastAPI(title="gserver")
 
-GODOT_BIN = os.getenv("GODOT_BIN", "godot")
 GAME_PATH = os.getenv("GAME_PATH", ".")
+GODOT_BIN = os.getenv("GODOT_BIN", os.path.join(GAME_PATH, "godot"))
 PUBLIC_HOST = os.getenv("PUBLIC_HOST", "localhost")
 PORT_RANGE_START = int(os.getenv("PORT_RANGE_START", "7800"))
 PORT_RANGE_END = int(os.getenv("PORT_RANGE_END", "7900"))
@@ -81,6 +81,75 @@ class ReadyRequest(BaseModel):
 class ResultRequest(BaseModel):
     winner_team: int
     player_stats: list[dict]
+
+
+class QueueRequest(BaseModel):
+    player_id: str
+
+
+# ---------------------------------------------------------------------------
+# Queue state  (2-player matchmaking for local testing without Nakama)
+# ---------------------------------------------------------------------------
+
+_queue_waiting: list[str] = []
+_queue_matches: dict[str, dict] = {}
+_queue_lock: asyncio.Lock | None = None
+
+
+def _get_lock() -> asyncio.Lock:
+    global _queue_lock
+    if _queue_lock is None:
+        _queue_lock = asyncio.Lock()
+    return _queue_lock
+
+
+async def _allocate_for_players(player_a: str, player_b: str) -> None:
+    """Background task: spawn referee when 2 players are queued."""
+    try:
+        match_id = str(uuid.uuid4())
+        port = await port_pool.acquire()
+        event = asyncio.Event()
+        ready_events[match_id] = event
+
+        proc = await asyncio.create_subprocess_exec(
+            GODOT_BIN, "--headless",
+            "--path", GAME_PATH,
+            "--",
+            "--mode=referee",
+            f"--match-id={match_id}",
+            f"--port={port}",
+            f"--orchestrator-url=http://{PUBLIC_HOST}:8080",
+        )
+
+        registry[match_id] = MatchRecord(
+            match_id=match_id,
+            port=port,
+            player_ids=[player_a, player_b],
+            proc=proc,
+        )
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=ALLOCATE_TIMEOUT_S)
+        except TimeoutError:
+            proc.kill()
+            registry.pop(match_id, None)
+            ready_events.pop(match_id, None)
+            await port_pool.release(port)
+            print(f"[queue] Referee for match {match_id} timed out")
+            return
+
+        match_info = {
+            "status": "matched",
+            "match_id": match_id,
+            "referee_host": PUBLIC_HOST,
+            "referee_port": port,
+        }
+        _queue_matches[player_a] = match_info
+        _queue_matches[player_b] = match_info
+        print(f"[queue] Match {match_id} ready on :{port} for {player_a}, {player_b}")
+
+    except Exception as e:
+        print(f"[queue] Allocation error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +232,35 @@ async def get_match(match_id: str) -> dict:
         "ready": r.ready,
         "started_at": r.started_at.isoformat(),
     }
+
+
+@app.post("/queue")
+async def queue_join(req: QueueRequest) -> dict:
+    lock = _get_lock()
+    player_a = player_b = None
+
+    async with lock:
+        if req.player_id in _queue_waiting or req.player_id in _queue_matches:
+            return {"status": "already_queued", "player_id": req.player_id}
+        _queue_waiting.append(req.player_id)
+        if len(_queue_waiting) >= 2:
+            player_a = _queue_waiting.pop(0)
+            player_b = _queue_waiting.pop(0)
+
+    if player_a is not None:
+        asyncio.create_task(_allocate_for_players(player_a, player_b))
+
+    print(f"[queue] {req.player_id} joined — waiting: {_queue_waiting}")
+    return {"status": "queued", "player_id": req.player_id}
+
+
+@app.get("/queue/{player_id}/status")
+async def queue_status(player_id: str) -> dict:
+    if player_id in _queue_matches:
+        return _queue_matches.pop(player_id)
+    if player_id in _queue_waiting:
+        return {"status": "waiting"}
+    raise HTTPException(404, f"Player {player_id} not in queue")
 
 
 @app.get("/health")
