@@ -235,7 +235,7 @@ func _on_connected_to_server() -> void:
 	print("[MatchSession] Connected to referee — my id: %d" % multiplayer.get_unique_id())
 	_ensure_player_hud()
 	_update_info()
-	request_character.rpc_id(REFEREE_PEER_ID, _character_id)
+	request_character.rpc_id(REFEREE_PEER_ID, _character_id, PlayerData.get_equipped_card_ids())
 
 
 func _on_connection_failed() -> void:
@@ -254,9 +254,11 @@ func _on_server_disconnected() -> void:
 # ============================================================
 
 @rpc("any_peer", "reliable")
-func request_character(character_id: String) -> void:
+func request_character(character_id: String, equipped_card_ids: Array[String] = []) -> void:
 	assert(_is_server, "MatchSession.request_character must only run on referee")
-	_referee_manager.set_character_choice(multiplayer.get_remote_sender_id(), character_id)
+	_referee_manager.set_character_choice(
+		multiplayer.get_remote_sender_id(), character_id, equipped_card_ids
+	)
 
 
 @rpc("any_peer", "reliable")
@@ -430,6 +432,8 @@ func _on_skill_pressed(skill_idx: int) -> void:
 		var skill: SkillData = skills[skill_idx] as SkillData
 		if skill != null and skill.animation_name != "":
 			_local_character.play_attack_animation(skill.animation_name)
+		if skill != null and _player_hud != null:
+			_player_hud.start_skill_cooldown(skill_idx, skill.cooldown)
 	request_skill.rpc_id(REFEREE_PEER_ID, skill_idx, _local_character.facing_direction)
 
 

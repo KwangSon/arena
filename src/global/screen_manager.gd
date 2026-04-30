@@ -15,6 +15,8 @@ enum Screen {
 	CHARACTER_SELECT,
 	GAME,
 	RESULT,
+	SHOP,
+	DECK,
 }
 
 ## 현재 활성 화면 타입.
@@ -65,18 +67,24 @@ func get_current_screen_node() -> Node:
 
 
 func _create_screen(target: Screen) -> Node:
+	var screen: Node = null
 	match target:
 		Screen.LOBBY:
-			return _create_lobby_screen()
+			screen = _create_lobby_screen()
 		Screen.CHARACTER_SELECT:
-			return _create_character_select_screen()
+			screen = _create_character_select_screen()
 		Screen.GAME:
-			return _create_game_screen()
+			screen = _create_game_screen()
 		Screen.RESULT:
-			return _create_result_screen()
+			screen = _create_result_screen()
+		Screen.SHOP:
+			screen = _create_shop_screen()
+		Screen.DECK:
+			screen = _create_deck_screen()
 		_:
 			assert(false, "ScreenManager: unknown screen type %d" % target)
-			return null
+	assert(screen != null, "ScreenManager: failed to create screen %d" % target)
+	return screen
 
 
 func _create_lobby_screen() -> Node:
@@ -104,6 +112,18 @@ func _create_result_screen() -> Node:
 	return screen
 
 
+func _create_shop_screen() -> Node:
+	var screen: Node = (preload("res://src/screen/shop_screen.gd") as GDScript).new()
+	screen.name = "ShopScreen"
+	return screen
+
+
+func _create_deck_screen() -> Node:
+	var screen: Node = (preload("res://src/screen/deck_screen.gd") as GDScript).new()
+	screen.name = "DeckScreen"
+	return screen
+
+
 # ============================================================
 # 화면별 시그널 연결
 # ============================================================
@@ -115,11 +135,35 @@ func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 			if screen_node.has_signal("match_found"):
 				var err: int = screen_node.match_found.connect(_on_match_found)
 				assert(err == OK, "ScreenManager: failed to connect match_found: %d" % err)
+			if screen_node.has_signal("shop_requested"):
+				var err: int = screen_node.shop_requested.connect(_on_shop_requested)
+				assert(err == OK, "ScreenManager: failed to connect shop_requested: %d" % err)
+			if screen_node.has_signal("deck_requested"):
+				var err: int = screen_node.deck_requested.connect(_on_deck_requested)
+				assert(err == OK, "ScreenManager: failed to connect deck_requested: %d" % err)
 		Screen.CHARACTER_SELECT:
 			if screen_node.has_signal("character_chosen"):
 				var err: int = screen_node.character_chosen.connect(_on_character_chosen)
 				assert(err == OK, "ScreenManager: failed to connect character_chosen: %d" % err)
 		Screen.RESULT:
+			if screen_node.has_signal("return_to_lobby_requested"):
+				var err: int = screen_node.return_to_lobby_requested.connect(
+					_on_return_to_lobby_requested
+				)
+				assert(
+					err == OK,
+					"ScreenManager: failed to connect return_to_lobby_requested: %d" % err
+				)
+		Screen.SHOP:
+			if screen_node.has_signal("return_to_lobby_requested"):
+				var err: int = screen_node.return_to_lobby_requested.connect(
+					_on_return_to_lobby_requested
+				)
+				assert(
+					err == OK,
+					"ScreenManager: failed to connect return_to_lobby_requested: %d" % err
+				)
+		Screen.DECK:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				var err: int = screen_node.return_to_lobby_requested.connect(
 					_on_return_to_lobby_requested
@@ -145,6 +189,14 @@ func _on_match_found(host: String, port: int, match_id: String) -> void:
 func _on_character_chosen(character_id: String) -> void:
 	_cleanup_current_screen()
 	game_ready.emit(_pending_host, _pending_port, _pending_match_id, character_id)
+
+
+func _on_shop_requested() -> void:
+	change_screen(Screen.SHOP)
+
+
+func _on_deck_requested() -> void:
+	change_screen(Screen.DECK)
 
 
 func _on_return_to_lobby_requested() -> void:
@@ -176,11 +228,17 @@ func _disconnect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 			if screen_node.has_signal("match_found"):
 				if screen_node.match_found.is_connected(_on_match_found):
 					screen_node.match_found.disconnect(_on_match_found)
+			if screen_node.has_signal("shop_requested"):
+				if screen_node.shop_requested.is_connected(_on_shop_requested):
+					screen_node.shop_requested.disconnect(_on_shop_requested)
+			if screen_node.has_signal("deck_requested"):
+				if screen_node.deck_requested.is_connected(_on_deck_requested):
+					screen_node.deck_requested.disconnect(_on_deck_requested)
 		Screen.CHARACTER_SELECT:
 			if screen_node.has_signal("character_chosen"):
 				if screen_node.character_chosen.is_connected(_on_character_chosen):
 					screen_node.character_chosen.disconnect(_on_character_chosen)
-		Screen.RESULT:
+		Screen.RESULT, Screen.SHOP, Screen.DECK:
 			if screen_node.has_signal("return_to_lobby_requested"):
 				if screen_node.return_to_lobby_requested.is_connected(
 					_on_return_to_lobby_requested

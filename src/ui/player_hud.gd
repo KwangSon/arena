@@ -7,6 +7,8 @@ const _BUTTON_SPACING: float = 30.0
 const _BUTTON_Y_OFFSET: float = -120.0
 const _BUTTON_X_OFFSET: float = -60.0
 
+var _cooldown_remaining: Array[float] = [0.0, 0.0, 0.0]
+
 @onready var _movement_joystick: VirtualJoystick = $"Virtual Joystick" as VirtualJoystick
 @onready var _skill_1_button: TouchScreenButton = $HBoxContainer/Skill1Button as TouchScreenButton
 @onready var _skill_2_button: TouchScreenButton = $HBoxContainer/Skill2Button as TouchScreenButton
@@ -50,6 +52,23 @@ func _position_skill_buttons() -> void:
 	_special_button.position = Vector2(_BUTTON_X_OFFSET, _BUTTON_Y_OFFSET)
 
 
+func _process(delta: float) -> void:
+	for i: int in range(3):
+		if _cooldown_remaining[i] > 0.0:
+			_cooldown_remaining[i] -= delta
+			if _cooldown_remaining[i] <= 0.0:
+				_cooldown_remaining[i] = 0.0
+				_get_skill_button(i).visible = true
+
+
+func start_skill_cooldown(skill_idx: int, duration: float) -> void:
+	assert(skill_idx >= 0 and skill_idx <= 2, "PlayerHud: invalid skill_idx %d" % skill_idx)
+	if duration <= 0.0:
+		return
+	_cooldown_remaining[skill_idx] = duration
+	_get_skill_button(skill_idx).visible = false
+
+
 func update_resources(mp: float, max_mp: float, bp: float, max_bp: float) -> void:
 	_mp_bar.max_value = max_mp
 	_mp_bar.value = mp
@@ -62,6 +81,16 @@ func get_move_input() -> Vector2:
 		return _movement_joystick.output
 
 	return Vector2.ZERO
+
+
+func _get_skill_button(skill_idx: int) -> TouchScreenButton:
+	match skill_idx:
+		0:
+			return _skill_1_button
+		1:
+			return _skill_2_button
+		_:
+			return _special_button
 
 
 func _on_skill_1_pressed() -> void:

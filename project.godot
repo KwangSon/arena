@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 Nakama="*uid://cxuvjuyos0vhy"
 ScreenManager="*uid://coc6nwadugq8v"
+PlayerData="*uid://cmyavla276dy0"
 
 [display]
 

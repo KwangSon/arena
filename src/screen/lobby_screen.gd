@@ -2,6 +2,8 @@
 class_name LobbyScreen extends Node2D
 
 signal match_found(host: String, port: int, match_id: String)
+signal shop_requested
+signal deck_requested
 
 const GSERVER_URL: String = "http://localhost:8080"
 const POLL_INTERVAL_SEC: float = 2.0
@@ -37,8 +39,27 @@ func _ready() -> void:
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_status_label)
 
+	var nav_hbox := HBoxContainer.new()
+	nav_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	nav_hbox.add_theme_constant_override("separation", 16)
+	vbox.add_child(nav_hbox)
+
+	var shop_btn := Button.new()
+	shop_btn.text = "상점"
+	shop_btn.custom_minimum_size = Vector2(100, 50)
+	nav_hbox.add_child(shop_btn)
+
+	var deck_btn := Button.new()
+	deck_btn.text = "캐릭터"
+	deck_btn.custom_minimum_size = Vector2(100, 50)
+	nav_hbox.add_child(deck_btn)
+
 	var err: int = _start_button.pressed.connect(_on_start_pressed)
 	assert(err == OK, "LobbyScreen: failed to connect start button: %d" % err)
+	err = shop_btn.pressed.connect(func() -> void: shop_requested.emit())
+	assert(err == OK, "LobbyScreen: failed to connect shop button: %d" % err)
+	err = deck_btn.pressed.connect(func() -> void: deck_requested.emit())
+	assert(err == OK, "LobbyScreen: failed to connect deck button: %d" % err)
 
 
 func _on_start_pressed() -> void:

@@ -13,3 +13,4 @@ var damage_reduction: float = 0.0
 var move_speed_mult: float = 1.0
 var bp_regen_mult: float = 1.0
 var mp_cost_mult: float = 1.0
+var cost: int = 0

@@ -91,8 +91,10 @@ func on_peer_connected(peer_id: int) -> void:
 		_move_inputs[peer_id] = Vector2.ZERO
 
 
-func set_character_choice(peer_id: int, character_id: String) -> void:
-	_spawn_character(peer_id, character_id)
+func set_character_choice(
+	peer_id: int, character_id: String, equipped_card_ids: Array[String] = []
+) -> void:
+	_spawn_character(peer_id, character_id, equipped_card_ids)
 
 
 func on_peer_disconnected(peer_id: int) -> void:
@@ -180,7 +182,9 @@ func remove_character(peer_id: int) -> void:
 # ============================================================
 
 
-func _spawn_character(peer_id: int, character_id: String = "") -> void:
+func _spawn_character(
+	peer_id: int, character_id: String = "", equipped_card_ids: Array[String] = []
+) -> void:
 	for child in _character_container.get_children():
 		if child.name == str(peer_id):
 			return
@@ -199,8 +203,26 @@ func _spawn_character(peer_id: int, character_id: String = "") -> void:
 	assert(character != null, "RefereeManager: failed to spawn for peer %d" % peer_id)
 	var char_base: CharacterBase = character as CharacterBase
 	assert(char_base != null, "RefereeManager: spawned node is not CharacterBase")
-	_equip_demo_cards(char_base, character_id)
+	if equipped_card_ids.is_empty():
+		_equip_demo_cards(char_base, character_id)
+	else:
+		_equip_actual_cards(char_base, equipped_card_ids)
 	print("[RefereeManager] Spawned %s for peer %d at %s" % [character_id, peer_id, position])
+
+
+func _equip_actual_cards(character: CharacterBase, card_ids: Array[String]) -> void:
+	for card_id: String in card_ids:
+		var card: CardData = _find_card_def(card_id)
+		if card != null:
+			character.equip_card(card)
+	character.apply_equipped_cards()
+
+
+func _find_card_def(card_id: String) -> CardData:
+	for card: CardData in CardDefinitions.get_all():
+		if card.id == card_id:
+			return card
+	return null
 
 
 func _equip_demo_cards(character: CharacterBase, character_id: String) -> void:

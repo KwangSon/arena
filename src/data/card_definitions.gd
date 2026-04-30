@@ -8,6 +8,7 @@ static func get_main_weapon() -> CardData:
 	card.slot = CardData.Slot.MAIN_WEAPON
 	card.damage_mult = 1.2
 	card.cooldown_mult = 0.85
+	card.cost = 400
 	return card
 
 
@@ -18,6 +19,7 @@ static func get_sub_weapon() -> CardData:
 	card.slot = CardData.Slot.SUB_WEAPON
 	card.damage_mult = 1.2
 	card.cooldown_mult = 0.85
+	card.cost = 350
 	return card
 
 
@@ -28,6 +30,7 @@ static func get_armor() -> CardData:
 	card.slot = CardData.Slot.ARMOR
 	card.max_hp_bonus = 20
 	card.damage_reduction = 0.15
+	card.cost = 300
 	return card
 
 
@@ -38,6 +41,7 @@ static func get_shoes() -> CardData:
 	card.slot = CardData.Slot.SHOES
 	card.move_speed_mult = 1.2
 	card.bp_regen_mult = 1.5
+	card.cost = 300
 	return card
 
 
@@ -48,6 +52,7 @@ static func get_ultimate() -> CardData:
 	card.slot = CardData.Slot.ULTIMATE
 	card.cooldown_mult = 0.8
 	card.mp_cost_mult = 0.85
+	card.cost = 500
 	return card
 
 
