@@ -31,4 +31,18 @@ func _on_game_ready(host: String, port: int, match_id: String) -> void:
 	session._referee_host = host
 	session._referee_port = port
 	session._match_id = match_id
+	var err: int = session.match_completed.connect(_on_match_completed.bind(session))
+	assert(err == OK, "Main: failed to connect match_completed: %d" % err)
 	add_child(session)
+
+
+func _on_match_completed(
+	reason: String, loser_id: int, winner_id: int, session: MatchSession
+) -> void:
+	var local_id: int = multiplayer.get_unique_id()
+	var won: bool = winner_id == local_id
+	session.queue_free()
+	ScreenManager.change_screen(
+		ScreenManager.Screen.RESULT,
+		{"won": won, "winner_id": winner_id, "loser_id": loser_id, "reason": reason}
+	)

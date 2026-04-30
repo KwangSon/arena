@@ -85,10 +85,9 @@ func _create_game_screen() -> Node:
 
 
 func _create_result_screen() -> Node:
-	# TODO: ResultScreen 구현 후 교체
-	var placeholder: Node2D = Node2D.new()
-	placeholder.name = "ResultScreen"
-	return placeholder
+	var screen: ResultScreen = ResultScreen.new()
+	screen.name = "ResultScreen"
+	return screen
 
 
 # ============================================================

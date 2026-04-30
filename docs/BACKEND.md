@@ -379,9 +379,11 @@ services:
 3. 결과를 Nakama Notification으로 클라이언트에 전달
 4. Storage 스키마 정의 (profile, deck, match_result)
 
-### Sprint 3 — Godot 심판 연동
-1. `referee_manager.gd` — 인자 파싱 + READY/RESULT HTTP 보고
-2. `test_combat.gd`의 referee 로직을 `referee_manager.gd`로 이식
+### Sprint 3 — Godot 심판 연동 ✅
+1. `referee_manager.gd` — `--port`, `--match-id`, `--orchestrator-url` 인자 파싱 완료
+2. ENet 서버 바인딩 후 `POST /match/{id}/ready` 자동 호출
+3. 게임 종료 시 `POST /match/{id}/result` 자동 호출
+4. `gserver/main.py` — 로컬 테스트용 FastAPI 오케스트레이터 구현 완료
 
 ### Sprint 4 — Godot 클라이언트 연동
 1. `nakama_client.gd` — SDK 초기화, 로그인, 실시간 소켓

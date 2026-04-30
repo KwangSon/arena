@@ -87,7 +87,14 @@ Each game mode implements `IModeManager` for a consistent lifecycle.
 
 ### Stage 1 — Direct ENet (current)
 
-Godot's high-level multiplayer over ENet. The referee instance creates an ENet server; player instances connect as clients. There is no external matchmaking — instances are launched manually or via the editor's "Run Multiple Instances" feature.
+Godot's high-level multiplayer over ENet. The referee instance creates an ENet server; player instances connect as clients.
+
+Two ways to run a match locally — see `docs/BATTLE_TEST.md` for details:
+
+| Method | How | Port |
+|---|---|---|
+| 3 editor instances | Editor "Run Multiple Instances → 3", first gets `--mode=referee` | 7777 |
+| gserver (FastAPI) | `GAME_PATH=... uv run gserver/main.py` spawns referee headless; clients connect via lobby | 8080 (HTTP), 7800–7899 (ENet) |
 
 ```
                   ┌─────────────────────┐
@@ -187,84 +194,63 @@ These can be added later if data shows they are needed.
 ```
 arena/
 ├── project.godot
+├── gserver/                       # Local FastAPI orchestrator (dev/testing)
+│   └── main.py                    # HTTP server that spawns referee processes
+│
 ├── src/
-│   ├── main.gd                    # Entry point + mode dispatch
+│   ├── main.gd                    # Entry point — referee vs player mode dispatch
 │   ├── main.tscn                  # Minimal main scene
 │   │
 │   ├── global/                    # Autoloads
-│   │   ├── app_mode.gd            # PLAYER vs REFEREE detection (Node autoload)
-│   │   └── game_events.gd         # Global signal bus (Node autoload)
+│   │   └── screen_manager.gd      # Screen lifecycle manager + game_ready signal
 │   │
 │   ├── screen/                    # UI screens (Player mode only)
-│   │   ├── screen_manager.gd
-│   │   ├── login_screen.gd
-│   │   ├── lobby_screen.gd
-│   │   ├── shop_screen.gd
-│   │   ├── matchmaking_screen.gd
-│   │   ├── character_select_screen.gd
-│   │   ├── game_screen.gd
-│   │   └── result_screen.gd
-│   │
-│   ├── referee/                   # Referee-only logic
-│   │   ├── referee_manager.gd
-│   │   └── referee_starter.gd     # Headless bootstrap
-│   │
-│   ├── network/
-│   │   ├── nakama_client.gd       # Stage 2: Nakama wrapper
-│   │   ├── match_manager.gd       # ENet match session
-│   │   └── synchronizer.gd        # MultiplayerSynchronizer wrapper
+│   │   ├── lobby_screen.gd        # Matchmaking queue UI (gserver HTTP polling)
+│   │   ├── result_screen.gd       # Post-match result + return-to-lobby
+│   │   ├── game_screen.gd         # (planned)
+│   │   ├── login_screen.gd        # (planned — Stage 2 Nakama)
+│   │   ├── shop_screen.gd         # (planned)
+│   │   └── character_select_screen.gd  # (planned)
 │   │
 │   ├── game/
-│   │   ├── mode_interface.gd      # IModeManager base class
-│   │   ├── game_settings.gd       # Constants (static, not an autoload)
-│   │   ├── tdm_manager.gd         # TDM mode logic
-│   │   ├── game_state.gd
-│   │   ├── team_manager.gd
-│   │   └── victory_checker.gd
+│   │   └── match_session.gd       # Network layer + RPCs (referee & client share same path)
+│   │
+│   ├── referee/
+│   │   └── referee_manager.gd     # Referee-only game logic (child of MatchSession)
 │   │
 │   ├── character/
-│   │   ├── character_base.gd      # Base CharacterBody2D
-│   │   ├── character_spawner.gd
-│   │   ├── movement_controller.gd
-│   │   └── skill_controller.gd
+│   │   ├── character_base.gd      # CharacterBody2D with HP/MP/BP + movement
+│   │   ├── character_base.tscn    # Minimal scene for character_base.gd
+│   │   └── character_spawner.gd   # Static helpers: create_node() + MultiplayerSynchronizer setup
 │   │
 │   ├── combat/
-│   │   ├── hit_detector.gd        # Referee-side
-│   │   ├── damage_calculator.gd
-│   │   ├── card_effect_processor.gd  # Referee rolls RNG
-│   │   ├── projectile.gd
-│   │   └── melee_attack.gd
+│   │   ├── skill_executor.gd      # Referee-side skill execution + hit detection
+│   │   ├── projectile.gd          # Projectile node (spawned via MultiplayerSpawner)
+│   │   └── projectile.tscn        # Minimal scene for projectile.gd
 │   │
 │   ├── input/
-│   │   ├── joystick.gd
-│   │   ├── input_processor.gd
-│   │   └── dash_detector.gd
+│   │   └── dash_detector.gd       # Double-tap dash detection (client-side)
 │   │
-│   ├── data/                      # Code-based data (no .tres files)
-│   │   ├── enums.gd
-│   │   ├── character_data.gd      # CharacterData Resource definition
-│   │   ├── character_definitions.gd
-│   │   ├── skill_data.gd
-│   │   ├── skill_definitions.gd
-│   │   ├── card_data.gd
-│   │   └── card_definitions.gd
+│   ├── data/                      # Code-based data definitions (no .tres files)
+│   │   ├── character_data.gd      # CharacterData class
+│   │   ├── character_definitions.gd  # CharacterDefinitions.create(id) factory
+│   │   ├── skill_data.gd          # SkillData class
+│   │   ├── card_data.gd           # CardData class (slot-based equipment)
+│   │   └── card_definitions.gd    # CardDefinitions static factory
 │   │
 │   └── ui/
-│       ├── player_hud.gd
-│       ├── referee_hud.gd
-│       ├── health_bar.gd
-│       ├── resource_bar.gd
-│       ├── skill_button.gd
-│       └── joystick_ui.gd
+│       ├── player_hud.gd          # In-game HUD (MP/BP bars, skill buttons, joystick)
+│       └── player_hud.tscn
 │
 └── test/
-    ├── unit/                      # GUT tests
-    │   ├── test_sanity.gd
-    │   ├── test_combat.gd
-    │   ├── test_movement.gd
-    │   └── test_card_effects.gd
+    ├── unit/                      # GUT unit tests
+    │   ├── test_card_effects.gd
+    │   ├── test_character_spawner.gd
+    │   ├── test_dash_detector.gd
+    │   ├── test_referee_movement.gd
+    │   └── test_skill_executor.gd
     └── manual/                    # Multi-instance manual tests
-        ├── test_combat.gd         # ENet + spawn + RPC smoke test
+        ├── test_combat.gd         # Thin wrapper around MatchSession + ping/disconnect debug UI
         └── test_combat.tscn
 ```
 
@@ -272,107 +258,16 @@ arena/
 
 ## Core Data Types
 
-### AppMode (Autoload)
-```gdscript
-## Application mode — Player vs Referee. Detected from cmdline args.
-class_name AppMode extends Node
-
-enum Mode { PLAYER, REFEREE }
-
-var current_mode: Mode = Mode.PLAYER
-
-func _ready() -> void:
-    var args: Array = OS.get_cmdline_args()
-    current_mode = Mode.REFEREE if "--mode=referee" in args else Mode.PLAYER
-
-func is_player_mode() -> bool:
-    return current_mode == Mode.PLAYER
-
-func is_referee_mode() -> bool:
-    return current_mode == Mode.REFEREE
-```
-
-### GameEvents (Autoload)
-```gdscript
-## Global signal bus for decoupled communication.
-class_name GameEvents extends Node
-
-# Match
-signal match_started(match_id: String)
-signal match_ended(winner_team: int)
-
-# Character
-signal character_spawned(character_id: String, team_id: int)
-signal character_died(character_id: String, team_id: int)
-signal character_hit(attacker_id: String, target_id: String, damage: int)
-
-# Resources
-signal hp_changed(character_id: String, current: int, maximum: int)
-signal mp_changed(character_id: String, current: int, maximum: int)
-signal bp_changed(character_id: String, current: int, maximum: int)
-
-# Screens
-signal screen_requested(screen_name: String)
-signal screen_transitioned(from_screen: String, to_screen: String)
-```
-
-### GameSettings (Static Constants — NOT an Autoload)
-
-Just compile-time constants. Access as `GameSettings.MATCH_SIZE` from any script. No instance, no autoload registration.
+Mode detection is done inline at startup — no autoload needed:
 
 ```gdscript
-class_name GameSettings
-
-# Match
-const MATCH_SIZE: int = 6
-const TEAM_SIZE: int = 3
-
-# Resources
-const DEFAULT_MAX_HP: int = 100
-const DEFAULT_MAX_MP: int = 100
-const DEFAULT_MAX_BP: int = 100
-
-# Dash
-const BP_DASH_DRAIN_PER_SEC: float = 25.0  # BP drained per second while dashing
-const DOUBLE_TAP_TIME_WINDOW: float = 0.3
-
-# Regen (per second)
-const DEFAULT_MP_REGEN: float = 1.0
-const DEFAULT_BP_REGEN: float = 5.0
-
-# Network
-const DEFAULT_SERVER_PORT: int = 7777
-const RECONNECT_TIMEOUT: float = 10.0
-```
-
-### IModeManager (Base Class)
-
-GDScript has no real interfaces, so `IModeManager` is a base class whose virtual methods `assert(false, ...)` if not overridden. This catches "forgot to override" bugs at the source instead of letting them silently no-op.
-
-```gdscript
-## Base class for all game modes. Subclasses MUST override every method.
-class_name IModeManager extends RefCounted
-
-func start_match(_players: Array[PlayerSession]) -> void:
-    assert(false, "IModeManager.start_match must be overridden")
-
-func process(_delta: float) -> void:
-    assert(false, "IModeManager.process must be overridden")
-
-## Returns winning team id (1 or 2), or -1 if match is still ongoing.
-func check_victory() -> int:
-    assert(false, "IModeManager.check_victory must be overridden")
-    return -1
-
-func get_spawn_positions(_team_id: int) -> Array[Vector2]:
-    assert(false, "IModeManager.get_spawn_positions must be overridden")
-    return []
+var _is_referee: bool = "--mode=referee" in OS.get_cmdline_user_args()
 ```
 
 ### CharacterData
 
 ```gdscript
-class_name CharacterData extends Resource
+class_name CharacterData
 
 var id: String
 var display_name: String
@@ -391,9 +286,13 @@ var ultimate: SkillData
 # Regen (per second)
 var mp_regen: float = 1.0
 var bp_regen: float = 5.0
+
+# Visuals
+var sprite_frames: SpriteFrames = null
+var default_animation: String = "idle_down"
 ```
 
-> Per the AI-First Code Strategy, all instances are constructed in code (`character_definitions.gd`). No `.tres` files, no `@export` annotations.
+> All instances are constructed in code (`character_definitions.gd`). No `.tres` files, no `@export` annotations.
 
 ### SkillData
 
@@ -414,123 +313,35 @@ var projectile_speed: float = 0.0  # 0 = melee/AOE
 
 ### CardData
 
-Cards are equipped before the match and trigger passively during combat. **The referee rolls all RNG** to prevent client-side cheating.
+Cards are slot-based equipment applied at character spawn. Each slot has a fixed stat modifier role.
 
 ```gdscript
 class_name CardData extends Resource
 
-enum TriggerEvent {
-    ON_HIT,       # fires when this player deals damage
-    ON_TAKE_HIT,  # fires when this player receives damage
-    PASSIVE,      # applied once at character spawn (stat modifier)
-}
-
-enum EffectType {
-    # ON_HIT effects
-    CRITICAL_HIT,    # prob% → damage × 2
-    LIFESTEAL,       # prob% → heal attacker by effect_value% of damage dealt
-    EXTRA_DAMAGE,    # prob% → damage += base_damage × effect_value
-
-    # ON_TAKE_HIT effects
-    DODGE,           # prob% → negate all incoming damage
-    THORNS,          # always → reflect effect_value% of incoming damage to attacker
-
-    # PASSIVE effects (applied at spawn, no probability roll)
-    MOVE_SPEED_BONUS,     # move_speed *= (1 + effect_value)
-    MP_REGEN_BONUS,       # mp_regen  *= (1 + effect_value)
-    COOLDOWN_REDUCTION,   # stored on CharacterBase; SkillExecutor reads it per-cast
-}
+enum Slot { MAIN_WEAPON, SUB_WEAPON, ARMOR, SHOES, ULTIMATE }
 
 var id: String
 var display_name: String
-var description: String
+var slot: Slot
 
-var trigger_event: TriggerEvent
-var effect_type: EffectType
-var effect_value: float        # multiplier or ratio; semantics depend on effect_type
-var trigger_probability: float # 0.0–1.0; PASSIVE cards ignore this field
-
-var cost: int                  # shop price
+var damage_mult: float = 1.0       # MAIN_WEAPON / SUB_WEAPON
+var cooldown_mult: float = 1.0     # MAIN_WEAPON / ULTIMATE
+var max_hp_bonus: int = 0          # ARMOR
+var damage_reduction: float = 0.0  # ARMOR
+var move_speed_mult: float = 1.0   # SHOES
+var bp_regen_mult: float = 1.0     # SHOES
+var mp_cost_mult: float = 1.0      # ULTIMATE
 ```
 
-**Built-in card examples** (defined in `card_definitions.gd`):
+**Built-in cards** (defined in `card_definitions.gd`):
 
-| Card | Trigger | Prob | Effect |
-|---|---|---|---|
-| Critical Strike | ON_HIT | 20% | damage × 2 |
-| Lifesteal | ON_HIT | 30% | heal 25% of damage dealt |
-| Extra Damage | ON_HIT | 40% | +30% bonus damage |
-| Dodge | ON_TAKE_HIT | 25% | negate all damage |
-| Thorns | ON_TAKE_HIT | 100% | reflect 15% back to attacker |
-| Speed Demon | PASSIVE | — | move_speed +20% |
-| Regen Boost | PASSIVE | — | mp_regen +100% |
-
-### HitResult
-
-Returned by `CardProcessor.resolve_hit()`. Packages everything `SkillExecutor._apply_damage` needs after card resolution.
-
-```gdscript
-class_name HitResult extends RefCounted
-
-var final_damage: int      # damage applied to target (0 if dodged)
-var heal_amount: int       # HP restored to attacker (lifesteal)
-var reflected_damage: int  # damage applied back to attacker (thorns)
-var was_dodged: bool
-var was_critical: bool
-```
-
-### CardProcessor
-
-Stateless helper called exclusively on the referee. All `randf()` calls live here so RNG is server-authoritative.
-
-```gdscript
-class_name CardProcessor
-
-static func resolve_hit(
-    base_damage: int,
-    attacker_cards: Array[CardData],
-    target_cards: Array[CardData],
-) -> HitResult:
-    # 1. Apply ON_HIT cards (crit, lifesteal, extra damage)
-    # 2. Apply ON_TAKE_HIT cards (dodge cancels damage; thorns add reflected)
-    # Returns fully resolved HitResult
-
-static func apply_passive_cards(character: CharacterBase, cards: Array[CardData]) -> void:
-    # Called once per character at spawn.
-    # Modifies move_speed, mp_regen, cooldown_reduction on CharacterBase.
-```
-
-### GameState
-
-```gdscript
-class_name GameState extends RefCounted
-
-enum State { WAITING, PLAYING, ENDED }
-
-var current_state: State = State.WAITING
-var team1_alive: int = 3
-var team2_alive: int = 3
-var match_id: String
-var players: Array[PlayerSession] = []
-var winner_team: int = -1   # 1 or 2; -1 if not ended
-```
-
-### PlayerSession
-
-```gdscript
-class_name PlayerSession extends RefCounted
-
-var player_id: String
-var team_id: int                            # 1 or 2
-var character_id: String
-var equipped_card_ids: Array[String] = []   # Send IDs over the wire, not Resources
-var is_connected: bool = true
-
-# Stage 2 only — Nakama session token. Stays on client; never sent to referee.
-var session_token: String
-```
-
-> **Security note:** `session_token` (Stage 2) authenticates the user to Nakama. It is never transmitted to the referee — the referee receives only `player_id` plus per-match credentials Nakama hands it directly.
+| Card | Slot | Effect |
+|---|---|---|
+| 강화 주무기 | MAIN_WEAPON | damage ×1.2, cooldown ×0.85 |
+| 강화 보조무기 | SUB_WEAPON | damage ×1.2, cooldown ×0.85 |
+| 방어 갑옷 | ARMOR | +20 max HP, 15% damage reduction |
+| 질주 신발 | SHOES | move_speed ×1.2, bp_regen ×1.5 |
+| 강화 궁극기 | ULTIMATE | cooldown ×0.8, mp_cost ×0.85 |
 
 ## Network Flow
 
@@ -819,33 +630,35 @@ Bottom-up — each phase produces something playable that the next phase builds 
 
 > Naming note: roadmap *Phases* below are independent of the Stage 1 / Stage 2 *network-stack* labels used earlier. Network Stage 2 begins at roadmap Phase 5.
 
-### Phase 1 — Local Multiplayer Infrastructure (done)
+### Phase 1 — Local Multiplayer Infrastructure ✅
 - [x] ENet referee/client connection
 - [x] `MultiplayerSpawner`-based character spawning
 - [x] Basic RPC (request/broadcast)
 - [x] Disconnect / cleanup handling (grace period + timeout forfeit)
+- [x] FastAPI gserver — local orchestrator for referee process spawning
 
-### Phase 2 — Character & Movement
+### Phase 2 — Character & Movement ✅ (core done)
 - [x] `CharacterBase` with HP/MP/BP
 - [x] Joystick input
 - [x] Dash (double-tap joystick, continuous BP drain, stops on release or BP=0)
 - [x] MP/BP regen (referee-authoritative, synced via MultiplayerSynchronizer)
+- [x] Card equipment system (slot-based: weapon/armor/shoes/ultimate)
 - [ ] Client-side movement prediction + server reconciliation
 - [ ] Other-player position interpolation
 
-### Phase 3 — Combat
+### Phase 3 — Combat ✅
 - [x] Skill controller (skill_1, skill_2, ultimate)
 - [x] Melee + AOE + projectile hit detection (referee-side)
 - [x] HP / damage system
 - [x] Cooldown system
 - [x] Death + elimination logic
 
-### Phase 4 — Match Lifecycle
-- [ ] TDM mode (`tdm_manager.gd` implementing `IModeManager`)
-- [ ] Victory check + match end flow
-- [ ] Result screen
-- [ ] Multiple characters (3–5)
-- [ ] Card effects (referee-rolled RNG)
+### Phase 4 — Match Lifecycle (in progress)
+- [x] Match end broadcast (`broadcast_match_ended` RPC)
+- [x] Result screen + return-to-lobby flow
+- [ ] Multiple characters (currently knight/mage only)
+- [ ] Card effects applied to damage (damage_mult, damage_reduction, etc.)
+- [ ] TDM proper: 3v3 team victory condition
 
 ### Phase 5 — Nakama Integration (Network Stage 2 begins)
 - [ ] Real auth + login screen

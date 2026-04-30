@@ -1,6 +1,8 @@
 ## 매치 세션. referee와 client 모두 이 노드를 같은 경로에 추가해 RPC 경로를 일치시킨다.
 class_name MatchSession extends Node2D
 
+signal match_completed(reason: String, loser_id: int, winner_id: int)
+
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 const REFEREE_PEER_ID: int = 1
 const MAX_CLIENTS: int = 8
@@ -283,6 +285,8 @@ func broadcast_match_ended(reason: String, loser_id: int, winner_id: int) -> voi
 		msg += "  winner=%d" % winner_id
 	print("[MatchSession] %s" % msg)
 	_add_log(-1, msg)
+	if not _is_server:
+		match_completed.emit(reason, loser_id, winner_id)
 
 
 # ============================================================
