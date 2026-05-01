@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 Nakama="*uid://cxuvjuyos0vhy"
 ScreenManager="*uid://coc6nwadugq8v"
 PlayerData="*uid://cmyavla276dy0"
+NakamaService="*uid://dovvndx6knugr"
 
 [display]
 
@@ -37,8 +38,8 @@ pointing/emulate_touch_from_mouse=true
 
 [network]
 
-nakama/ip=""
-nakama/port=""
+nakama/ip="168.107.26.200"
+nakama/port="7350"
 
 [physics]
 
