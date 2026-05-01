@@ -9,11 +9,15 @@ const TARGET_ID: int = 3
 
 func _make_executor(character_container: Node2D) -> SkillExecutor:
 	var executor: SkillExecutor = SkillExecutor.new()
-	var spawner: MultiplayerSpawner = MultiplayerSpawner.new()
-	# Add spawner as sibling of character_container, not inside it.
-	# _execute_melee iterates character_container children and asserts CharacterBase.
-	character_container.get_parent().add_child(spawner)
-	executor.setup(character_container, spawner, REFEREE_PEER_ID)
+	var proj_spawner: MultiplayerSpawner = MultiplayerSpawner.new()
+	# Spawners are siblings of character_container to avoid AOE's CharacterBase assert.
+	character_container.get_parent().add_child(proj_spawner)
+	var hit_area_container: Node2D = Node2D.new()
+	character_container.get_parent().add_child(hit_area_container)
+	var melee_spawner: MultiplayerSpawner = MultiplayerSpawner.new()
+	character_container.get_parent().add_child(melee_spawner)
+	melee_spawner.spawn_path = hit_area_container.get_path()
+	executor.setup(character_container, proj_spawner, melee_spawner, REFEREE_PEER_ID)
 	return executor
 
 
@@ -45,6 +49,8 @@ func _spawn_character(root: Node2D, peer_id: int, pos: Vector2, team: int = 1) -
 	var character: CharacterBase = CHARACTER_SCENE.instantiate() as CharacterBase
 	character.name = str(peer_id)
 	character.team_id = team
+	character.collision_layer = team
+	character.collision_mask = 1 | 2
 	character.position = pos
 	root.add_child(character)
 	return character
@@ -56,10 +62,11 @@ func test_melee_hits_nearby_target() -> void:
 	watch_signals(executor)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
 	var skill: SkillData = _make_melee_skill(10, 200.0)
 
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 
 	assert_eq(target.hp, target.max_hp - skill.damage, "Target should take damage from melee")
 	assert_signal_emitted(executor, "hit_occurred")
@@ -71,10 +78,11 @@ func test_melee_misses_target_out_of_range() -> void:
 	watch_signals(executor)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(500.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(500.0, 0.0), 2)
 	var skill: SkillData = _make_melee_skill(10, 100.0)
 
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 
 	assert_eq(target.hp, target.max_hp, "Target should not take damage when out of range")
 	assert_signal_not_emitted(executor, "hit_occurred")
@@ -100,10 +108,11 @@ func test_cooldown_blocks_repeated_skill_use() -> void:
 	var executor: SkillExecutor = _make_executor(root)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
 	var skill: SkillData = _make_melee_skill(10, 200.0, 999.0)
 
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 	var hp_after_first: int = target.hp
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
 
@@ -115,13 +124,15 @@ func test_clear_peer_resets_cooldown() -> void:
 	var executor: SkillExecutor = _make_executor(root)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
 	var skill: SkillData = _make_melee_skill(10, 200.0, 999.0)
 
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 	executor.clear_peer(ATTACKER_ID)
 	var hp_before: int = target.hp
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 
 	assert_eq(target.hp, hp_before - skill.damage, "Cooldown should be reset after clear_peer")
 
@@ -164,11 +175,12 @@ func test_character_died_signal_emitted_when_hp_reaches_zero() -> void:
 	watch_signals(executor)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
 	target.hp = 1
 
 	var skill: SkillData = _make_melee_skill(100, 200.0)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 
 	assert_signal_emitted(executor, "character_died")
 
@@ -182,6 +194,7 @@ func test_melee_does_not_hit_self() -> void:
 	var skill: SkillData = _make_melee_skill(10, 9999.0)
 
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(1)
 
 	assert_eq(attacker.hp, attacker.max_hp, "Attacker should not damage itself")
 	assert_signal_not_emitted(executor, "hit_occurred")

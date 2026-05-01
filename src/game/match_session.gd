@@ -23,6 +23,8 @@ var _spawner: MultiplayerSpawner
 var _character_container: Node2D
 var _projectile_spawner: MultiplayerSpawner
 var _projectile_container: Node2D
+var _melee_hit_spawner: MultiplayerSpawner
+var _hit_area_container: Node2D
 var _camera: Camera2D
 var _local_character: CharacterBase
 
@@ -135,6 +137,16 @@ func _setup_scene() -> void:
 	_projectile_spawner.spawn_path = _projectile_container.get_path()
 	_projectile_spawner.spawn_function = _spawn_projectile_node
 
+	_hit_area_container = Node2D.new()
+	_hit_area_container.name = "HitAreaContainer"
+	add_child(_hit_area_container)
+
+	_melee_hit_spawner = MultiplayerSpawner.new()
+	_melee_hit_spawner.name = "MeleeHitSpawner"
+	add_child(_melee_hit_spawner)
+	_melee_hit_spawner.spawn_path = _hit_area_container.get_path()
+	_melee_hit_spawner.spawn_function = _spawn_melee_hit_area_node
+
 	var info_panel := PanelContainer.new()
 	info_panel.custom_minimum_size = Vector2(320, 50)
 	_canvas.add_child(info_panel)
@@ -158,6 +170,7 @@ func _setup_referee() -> void:
 			_character_container,
 			_spawner,
 			_projectile_spawner,
+			_melee_hit_spawner,
 			_match_id,
 			_orchestrator_url,
 			_referee_port,
@@ -363,6 +376,18 @@ func _get_local_move_input() -> Vector2:
 # ============================================================
 # Helpers
 # ============================================================
+
+
+func _spawn_melee_hit_area_node(data: Variant) -> Node:
+	assert(data is Dictionary, "MatchSession: melee hit area spawn data must be Dictionary")
+	var d: Dictionary = data
+	var area := MeleeHitArea.new()
+	area.position = d["position"]
+	area.set_multiplayer_authority(REFEREE_PEER_ID)
+	area.setup(
+		d["radius"], Color(d["color_r"], d["color_g"], d["color_b"], 0.35), d["collision_mask"]
+	)
+	return area
 
 
 func _spawn_projectile_node(data: Variant) -> Node:

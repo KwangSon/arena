@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Read(~/.zshrc)",
+      "Bash(godot *)",
+      "Bash(source *)",
+      "Bash(gdlint *)",
+      "Bash(gdformat *)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
