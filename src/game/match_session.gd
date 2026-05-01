@@ -5,6 +5,7 @@ signal match_completed(reason: String, loser_id: int, winner_id: int)
 
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
+const HIT_AREA_SCENE: PackedScene = preload("res://src/combat/hit_area.tscn")
 const REFEREE_PEER_ID: int = 1
 const MAX_CLIENTS: int = 8
 
@@ -381,7 +382,8 @@ func _get_local_move_input() -> Vector2:
 func _spawn_hit_area_node(data: Variant) -> Node:
 	assert(data is Dictionary, "MatchSession: hit area spawn data must be Dictionary")
 	var d: Dictionary = data
-	var area := HitArea.new()
+	var area := HIT_AREA_SCENE.instantiate() as HitArea
+	assert(area != null, "MatchSession: failed to instantiate HitArea scene")
 	area.position = d["position"]
 	area.set_multiplayer_authority(REFEREE_PEER_ID)
 	area.setup(
