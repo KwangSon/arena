@@ -4,6 +4,7 @@ class_name MatchSession extends Node2D
 signal match_completed(reason: String, loser_id: int, winner_id: int)
 
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
+const MAP_SCENE: PackedScene = preload("res://src/map/map_01.tscn")
 const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
 const HIT_AREA_SCENE: PackedScene = preload("res://src/combat/hit_area.tscn")
 const REFEREE_PEER_ID: int = 1
@@ -113,6 +114,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _setup_scene() -> void:
+	add_child(MAP_SCENE.instantiate())
+
 	_canvas = CanvasLayer.new()
 	add_child(_canvas)
 
