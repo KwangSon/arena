@@ -67,7 +67,6 @@ func test_melee_hits_nearby_target() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 
 	assert_eq(target.hp, target.max_hp - skill.damage, "Target should take damage from melee")
 	assert_signal_emitted(executor, "hit_occurred")
@@ -84,7 +83,6 @@ func test_melee_misses_target_out_of_range() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 
 	assert_eq(target.hp, target.max_hp, "Target should not take damage when out of range")
 	assert_signal_not_emitted(executor, "hit_occurred")
@@ -116,9 +114,7 @@ func test_cooldown_blocks_repeated_skill_use() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 	var hp_after_first: int = target.hp
-	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
 
 	assert_eq(target.hp, hp_after_first, "Second use should be blocked by cooldown")
@@ -134,12 +130,9 @@ func test_clear_peer_resets_cooldown() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 	executor.clear_peer(ATTACKER_ID)
 	var hp_before: int = target.hp
-	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 
 	assert_eq(target.hp, hp_before - skill.damage, "Cooldown should be reset after clear_peer")
 
@@ -190,7 +183,6 @@ func test_character_died_signal_emitted_when_hp_reaches_zero() -> void:
 	var skill: SkillData = _make_melee_skill(100, 200.0)
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 
 	assert_signal_emitted(executor, "character_died")
 
@@ -205,7 +197,6 @@ func test_melee_does_not_hit_self() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
-	await wait_physics_frames(2)
 
 	assert_eq(attacker.hp, attacker.max_hp, "Attacker should not damage itself")
 	assert_signal_not_emitted(executor, "hit_occurred")

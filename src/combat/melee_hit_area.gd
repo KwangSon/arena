@@ -1,6 +1,4 @@
-class_name MeleeHitArea extends Area2D
-
-signal overlap_done(bodies: Array)
+class_name MeleeHitArea extends Node2D
 
 const LIFETIME: float = 0.3
 const FILL_ALPHA_START: float = 0.4
@@ -11,26 +9,13 @@ var _base_color: Color = Color(1.0, 0.5, 0.0)
 var _elapsed: float = 0.0
 
 
-func setup(p_radius: float, p_color: Color, p_collision_mask: int) -> void:
+func setup(p_radius: float, p_color: Color, _p_collision_mask: int) -> void:
 	_radius = p_radius
 	_base_color = Color(p_color.r, p_color.g, p_color.b)
-	collision_layer = 0
-	collision_mask = p_collision_mask
-	monitorable = false
-
-	var shape := CircleShape2D.new()
-	shape.radius = _radius
-	var col := CollisionShape2D.new()
-	col.shape = shape
-	add_child(col)
 
 
 func _ready() -> void:
-	monitoring = is_multiplayer_authority()
 	queue_redraw()
-	if is_multiplayer_authority():
-		await get_tree().physics_frame
-		overlap_done.emit(get_overlapping_bodies())
 
 
 func _process(delta: float) -> void:

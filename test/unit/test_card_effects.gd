@@ -1,4 +1,4 @@
-extends GutTest
+extends GutTest  # gdlint: ignore = max-public-methods
 
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
 

@@ -115,21 +115,36 @@ func _execute_melee(
 	var enemy_layer: int = 2 if attacker.team_id == 1 else 1
 	var team_color: Color = _TEAM_COLORS[clampi(attacker.team_id, 0, _TEAM_COLORS.size() - 1)]
 
-	var spawn_data := {
-		"position": attacker.global_position,
-		"radius": skill.range,
-		"collision_mask": enemy_layer,
-		"color_r": team_color.r,
-		"color_g": team_color.g,
-		"color_b": team_color.b,
-	}
-	var node: Node = _melee_hit_spawner.spawn(spawn_data)
-	var area := node as MeleeHitArea
-	assert(area != null, "SkillExecutor: melee hit area spawn failed")
-	var err := area.overlap_done.connect(
-		_on_melee_overlap.bind(attacker_id, effective_damage, skill.id)
+	var circle := CircleShape2D.new()
+	circle.radius = skill.range
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = circle
+	query.transform = Transform2D(0, attacker.global_position)
+	query.collision_mask = enemy_layer
+	query.exclude = [attacker.get_rid()]
+	var hits: Array[Dictionary] = attacker.get_world_2d().direct_space_state.intersect_shape(query)
+	for hit in hits:
+		var target := hit["collider"] as CharacterBase
+		if target == null:
+			continue
+		var dummy := SkillData.new()
+		dummy.damage = effective_damage
+		dummy.id = skill.id
+		_apply_damage(attacker_id, int(target.name), target, dummy)
+
+	(
+		_melee_hit_spawner
+		. spawn(
+			{
+				"position": attacker.global_position,
+				"radius": skill.range,
+				"collision_mask": enemy_layer,
+				"color_r": team_color.r,
+				"color_g": team_color.g,
+				"color_b": team_color.b,
+			}
+		)
 	)
-	assert(err == OK, "SkillExecutor: failed to connect overlap_done: %d" % err)
 
 
 func _execute_aoe(
@@ -173,17 +188,6 @@ func _execute_projectile(
 			}
 		)
 	)
-
-
-func _on_melee_overlap(bodies: Array, attacker_id: int, damage: int, skill_id: String) -> void:
-	for body in bodies:
-		var target := body as CharacterBase
-		if target == null:
-			continue
-		var dummy := SkillData.new()
-		dummy.damage = damage
-		dummy.id = skill_id
-		_apply_damage(attacker_id, int(target.name), target, dummy)
 
 
 func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
