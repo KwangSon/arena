@@ -9,6 +9,8 @@ static func create(character_id: String) -> CharacterData:
 			return mage()
 		"knight":
 			return knight()
+		"prince":
+			return prince()
 		_:
 			assert(false, "CharacterDefinitions.get: unknown character_id '%s'" % character_id)
 			return null
@@ -137,4 +139,47 @@ static func mage() -> CharacterData:
 	data.skill_1 = fireball
 	data.skill_2 = frost
 	data.ultimate = meteor
+	return data
+
+
+static func prince() -> CharacterData:
+	var data := CharacterData.new()
+	data.id = "prince"
+	data.display_name = "왕자"
+	data.max_hp = 110
+	data.max_mp = 150
+	data.max_bp = 100
+	data.move_speed = 280.0
+
+	var stab := SkillData.new()
+	stab.id = "prince_stab"
+	stab.display_name = "우아한 찌르기"
+	stab.skill_type = SkillData.Type.MELEE
+	stab.damage = 18
+	stab.range = 100.0
+	stab.cooldown = 1.2
+
+	var orb := SkillData.new()
+	orb.id = "banish_orb"
+	orb.display_name = "추방의 구슬"
+	orb.skill_type = SkillData.Type.PROJECTILE
+	orb.damage = 10
+	orb.range = 300.0
+	orb.cooldown = 3.0
+	orb.projectile_speed = 500.0
+	orb.knockback_power = 800.0
+
+	var storm := SkillData.new()
+	storm.id = "royal_storm"
+	storm.display_name = "왕실의 폭풍"
+	storm.skill_type = SkillData.Type.AOE
+	storm.damage = 40
+	storm.range = 150.0
+	storm.cooldown = 12.0
+	storm.mp_cost = 50
+	storm.knockback_power = 1200.0
+
+	data.skill_1 = stab
+	data.skill_2 = orb
+	data.ultimate = storm
 	return data

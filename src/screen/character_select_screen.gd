@@ -6,6 +6,7 @@ const _CHARACTERS: Array[Dictionary] = [
 	{"id": "warrior", "name": "검사", "hp": 150, "mp": 80, "speed": 280},
 	{"id": "knight", "name": "기사", "hp": 130, "mp": 80, "speed": 290},
 	{"id": "mage", "name": "마법사", "hp": 80, "mp": 120, "speed": 260},
+	{"id": "prince", "name": "왕자", "hp": 110, "mp": 150, "speed": 280},
 ]
 
 var _canvas: CanvasLayer

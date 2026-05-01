@@ -34,6 +34,7 @@ var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
 var _anim_state: AnimState = AnimState.IDLE
+var knockback_velocity: Vector2 = Vector2.ZERO
 var _sprite: AnimatedSprite2D
 var _hp_bar: ProgressBar
 var _direction_line: Line2D
@@ -85,6 +86,10 @@ func _ready() -> void:
 
 func show_facing_indicator() -> void:
 	_direction_line.visible = true
+
+
+func apply_knockback(force: Vector2) -> void:
+	knockback_velocity += force
 
 
 func equip_card(card: CardData) -> void:
@@ -184,12 +189,13 @@ func _has_sprite_frames() -> bool:
 	return false
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if multiplayer.multiplayer_peer == null:
 		return
 	if not is_multiplayer_authority():
 		return
 
 	var speed: float = _move_speed * 2.0 if is_dashing else _move_speed
-	velocity = _move_input * speed
+	velocity = _move_input * speed + knockback_velocity
+	knockback_velocity = knockback_velocity.move_toward(Vector2.ZERO, 1500.0 * delta)
 	move_and_slide()

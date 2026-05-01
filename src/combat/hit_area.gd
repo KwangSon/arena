@@ -8,6 +8,7 @@ const RING_WIDTH: float = 3.0
 
 var attacker_id: int = 0
 var damage: int = 0
+var knockback_power: float = 0.0
 var skill_id: String = ""
 
 var _radius: float = 80.0

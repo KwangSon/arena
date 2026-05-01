@@ -6,6 +6,7 @@ signal body_hit(projectile: Projectile, body: Node2D)
 
 var attacker_id: int = 0
 var damage: int = 0
+var knockback_power: float = 0.0
 var skill_id: String = ""
 
 var _direction: Vector2 = Vector2.RIGHT
