@@ -85,7 +85,7 @@ Clients → ENet connect to localhost:7800
 Set the `PUBLIC_HOST` environment variable to the server's LAN IP.
 
 ```bash
-PUBLIC_HOST=192.168.1.100 GAME_PATH=/path/to/arena uv run main.py
+PUBLIC_HOST=192.168.1.100 GAME_PATH="$PWD/.." uv run main.py
 ```
 
 Clients (including mobile) must update `GSERVER_URL` in the lobby screen to that IP.

@@ -48,8 +48,6 @@ func _ready() -> void:
 	_is_server = "--mode=referee" in OS.get_cmdline_user_args()
 	if _is_server:
 		_parse_referee_args()
-	Input.set_emulate_touch_from_mouse(true)
-	Input.set_emulate_mouse_from_touch(false)
 	_setup_scene()
 	if _is_server:
 		_setup_referee()

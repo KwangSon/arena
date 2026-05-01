@@ -9,3 +9,4 @@
 # Nakama full source (reference only, not tracked)
 /src-nakama/
 
+*.apk*
