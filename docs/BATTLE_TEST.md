@@ -46,8 +46,8 @@ including other PCs or mobile devices — can connect.
 **Step 1 — Start gserver**
 
 ```bash
-cd arena/gserver
-arena$ GAME_PATH="$PWD/.." uv run main.py
+cd gserver
+gserver$ GAME_PATH="$PWD/.." uv run main.py
 ```
 
 > Uses the `godot` symlink inside `GAME_PATH` to spawn the referee.

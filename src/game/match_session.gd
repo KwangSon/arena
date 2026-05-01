@@ -59,6 +59,12 @@ func _ready() -> void:
 	_update_info()
 
 
+func _exit_tree() -> void:
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+
+
 func _parse_referee_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--port="):

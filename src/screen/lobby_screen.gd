@@ -5,7 +5,6 @@ signal match_found(host: String, port: int, match_id: String)
 signal shop_requested
 signal deck_requested
 
-const GSERVER_URL: String = "http://localhost:8080"
 const POLL_INTERVAL_SEC: float = 2.0
 
 var _player_id: String = ""
@@ -13,6 +12,7 @@ var _canvas: CanvasLayer
 var _start_button: Button
 var _status_label: Label
 var _poll_timer: Timer
+var _server_ip_input: LineEdit
 
 
 func _ready() -> void:
@@ -28,6 +28,20 @@ func _ready() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 20)
 	center.add_child(vbox)
+
+	var ip_hbox := HBoxContainer.new()
+	ip_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	ip_hbox.add_theme_constant_override("separation", 10)
+	vbox.add_child(ip_hbox)
+
+	var ip_label := Label.new()
+	ip_label.text = "Server IP:"
+	ip_hbox.add_child(ip_label)
+
+	_server_ip_input = LineEdit.new()
+	_server_ip_input.text = "localhost"
+	_server_ip_input.custom_minimum_size = Vector2(150, 40)
+	ip_hbox.add_child(_server_ip_input)
 
 	_start_button = Button.new()
 	_start_button.text = "매치 시작"
@@ -62,6 +76,13 @@ func _ready() -> void:
 	assert(err == OK, "LobbyScreen: failed to connect deck button: %d" % err)
 
 
+func _get_gserver_url() -> String:
+	var ip: String = _server_ip_input.text.strip_edges()
+	if ip.is_empty():
+		ip = "localhost"
+	return "http://%s:8080" % ip
+
+
 func _on_start_pressed() -> void:
 	_player_id = "p%d" % randi_range(100000, 999999)
 	_start_button.disabled = true
@@ -86,7 +107,7 @@ func _send_queue_request() -> void:
 	(
 		http
 		. request(
-			"%s/queue" % GSERVER_URL,
+			"%s/queue" % _get_gserver_url(),
 			["Content-Type: application/json"],
 			HTTPClient.METHOD_POST,
 			JSON.stringify({"player_id": _player_id}),
@@ -129,4 +150,4 @@ func _poll_status() -> void:
 				)
 	)
 	assert(err == OK, "LobbyScreen: failed to connect poll http: %d" % err)
-	http.request("%s/queue/%s/status" % [GSERVER_URL, _player_id])
+	http.request("%s/queue/%s/status" % [_get_gserver_url(), _player_id])

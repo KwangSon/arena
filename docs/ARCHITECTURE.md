@@ -646,28 +646,110 @@ Bottom-up — each phase produces something playable that the next phase builds 
 - [ ] Client-side movement prediction + server reconciliation
 - [ ] Other-player position interpolation
 
-### Phase 3 — Combat ✅
-- [x] Skill controller (skill_1, skill_2, ultimate)
-- [x] Melee + AOE + projectile hit detection (referee-side)
-- [x] HP / damage system
-- [x] Cooldown system
-- [x] Death + elimination logic
-
 ### Phase 4 — Match Lifecycle (in progress)
 - [x] Match end broadcast (`broadcast_match_ended` RPC)
 - [x] Result screen + return-to-lobby flow
-- [ ] Multiple characters (currently knight/mage only)
-- [ ] Card effects applied to damage (damage_mult, damage_reduction, etc.)
+- [x] Card effects applied to damage (damage_mult, damage_reduction, etc.)
 - [ ] TDM proper: 3v3 team victory condition
+- [ ] Multiple characters (currently knight/mage only)
 
-### Phase 5 — Nakama Integration (Network Stage 2 begins)
-- [ ] Real auth + login screen
-- [ ] Matchmaking flow (Nakama matchmaker → referee allocation)
-- [ ] Card / shop persistence
-- [ ] Account / progression
 
-### Phase 6 — Polish
-- [ ] Mobile UI tuning
-- [ ] Performance profiling for mobile target
-- [ ] Additional game modes (FFA, CTF, KOTH)
-- [ ] (Optional) Lag compensation / rewind hit detection if playtesting demands
+## Backend Architecture & Phased Strategy
+
+### Phased Strategy
+The backend is expanded in phases. Each phase can operate independently, progressing to the next only after the previous is complete.
+
+| Stage | Nakama Role | Matchmaking / Orchestration | Status |
+|-------|------------|-------------------|------|
+| **Stage 0** | None | gserver (Local FastAPI) | ✅ Current |
+| **Stage 1** | Auth + Storage + Leaderboard (Minimal) | gserver | Next |
+| **Stage 2** | Expanded with Matchmaking | Go module or gserver (TBD) | TBD |
+
+> **Core Principle**: Game traffic (ENet) NEVER goes through Nakama. Nakama is strictly for the control plane.
+
+### Stage 0 — gserver Only (Current) ✅
+Without Nakama, `gserver` (FastAPI) handles both matchmaking and referee process management.
+- Clients `POST` to `/queue` to start a match.
+- `gserver` spawns a headless referee process.
+- Referee `POST`s to `/match/{id}/ready` when initialized.
+- Clients poll `/queue/{player_id}/status` and connect directly to the referee via ENet.
+
+### Stage 1 — Minimal Nakama Integration (Next)
+Nakama is introduced minimally for three purposes:
+1. **Authentication**: Automatic Device ID login (no account UI).
+2. **Persistent Storage**: Gold, owned cards, and equipped decks.
+3. **Leaderboards**: Season win counts.
+
+Matchmaking, relay, chat, social features, and custom Go modules are NOT used yet. Matchmaking and referee allocation remain with `gserver`.
+
+#### Mock vs Real Mode
+If `nakama/ip` is empty in `project.godot`, the game runs in **Mock Mode** (no Nakama server needed).
+
+#### Screen Flow Changes
+- **Previous**: `main.gd` → `LOBBY`
+- **New**: `main.gd` → `LOGIN` → `LOBBY`
+The `LoginScreen` proceeds automatically in `_ready()` with no user input required.
+
+#### Role Distribution
+| Feature | Responsible Component |
+|---------|------------------------|
+| Device Auth | `NakamaService.login_async()` |
+| Profile/Deck Storage R/W | `NakamaService` (Nakama Storage) |
+| Card Purchase | `PlayerData.buy_card()` (Local, gold validation trusted on client) |
+| Leaderboard Query | `NakamaService.get_leaderboard_async()` |
+| **Post-Match Leaderboard Update** | **gserver** (Server-to-Server via Nakama HTTP API) |
+| Matchmaking & Referee Allocation | **gserver** (Same as Stage 0) |
+
+#### Nakama Storage Schema
+| Collection | Key | Value |
+|---|---|---|
+| `player` | `profile` | `{"gold": 2000, "owned_card_ids": ["armor"]}` |
+| `player` | `deck` | `{"equipped": {"2": "armor", "3": "shoes"}}` |
+
+- **Leaderboard ID**: `season_wins` (DESCENDING, BEST)
+
+### Stage 2 — Matchmaking Expansion (TBD)
+To be decided after Stage 1. Two options exist:
+
+#### Option A: Nakama Go Module
+Use Nakama's `RegisterMatchmakerMatched` hook. The Go module requests referee allocation from the orchestrator.
+- **Pros**: Utilizes Nakama's matchmaking infrastructure (skill rating, queue management).
+- **Cons**: Increased complexity in developing and deploying Go modules.
+
+#### Option B: gserver Expansion
+`gserver` implements the matchmaking logic directly.
+- **Pros**: Single Python stack, simple deployment.
+- **Cons**: Requires custom implementation of matchmaking (skill rating, timeouts, etc.).
+
+### Python Orchestrator Service Design (`gserver`)
+The orchestrator manages referee processes across all stages.
+- **Stack**: FastAPI + uvicorn, `asyncio.subprocess` (for Godot processes), `httpx` (for Nakama API).
+- **Port Pool Management**: Assigns available UDP/TCP ports (e.g., 7800-7900) to new referee instances.
+- **Health Monitoring**: Checks active match processes every 30 seconds. Terminates matches if the referee crashes or exceeds the maximum duration (20 mins).
+
+#### Deployment Structure (Stage 2)
+In production, the orchestrator and Nakama run via `docker-compose`. The orchestrator mounts the Godot binary and game export, exposing the required ports for ENet connections.
+
+#### Open Issues
+- **Stage 2 Matchmaking Approach**: TBD (Go module vs gserver).
+- **Referee Reconnection**: To be supported in Stage 2 via a `get_active_match` RPC.
+- **Kubernetes Scale-out**: Start with a single server, evaluate after playtests.
+
+### 📌 Remaining Tasks & Backlog (What's Left)
+
+#### 1. Core Gameplay & Network Polish (Phase 2 & 4)
+- **Client-Side Prediction & Reconciliation**: Implement smooth movement for the local player to hide input latency.
+- **Position Interpolation**: Render other players slightly behind the authoritative state to prevent visual jittering on the network.
+- **3v3 TDM Logic**: Ensure the referee correctly tracks `team1_alive` and `team2_alive` and broadcasts victory only when an entire team is eliminated.
+- **Character Expansion**: Add more character definitions and assets beyond `knight` and `mage`.
+
+#### 2. Network Stage 2 (Nakama Integration - Phase 5)
+- **Authentication**: Connect the Login screen to Nakama to issue real user session tokens.
+- **Matchmaking Flow**: Replace the manual FastAPI `gserver` orchestrator with Nakama Matchmaker to dynamically allocate players to referee instances.
+- **Persistence**: Store player data, owned cards, equipped decks, and shop purchases in Nakama Storage.
+
+#### 3. UX & Polish (Phase 6)
+- **Mobile UI Tuning**: Adjust virtual joystick, skill buttons, and HUD for actual mobile device dimensions and touch interactions.
+- **Performance Profiling**: Optimize code and assets to ensure 60fps on target mobile devices.
+- **Additional Game Modes**: Introduce Free-For-All (FFA), Capture The Flag (CTF), or King of the Hill (KOTH).
+- *(Optional)* **Lag Compensation**: Consider server-side rewind for hit detection if playtesting on mobile networks demands it.
