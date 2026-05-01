@@ -1,7 +1,8 @@
 extends GutTest
 
 const CHARACTER_SCENE: PackedScene = preload("res://src/character/character_base.tscn")
-const TEST_COMBAT_SCRIPT: GDScript = preload("res://test/manual/test_combat.gd")
+const MATCH_SESSION_SCRIPT: GDScript = preload("res://src/game/match_session.gd")
+const REFEREE_MANAGER_SCRIPT: GDScript = preload("res://src/referee/referee_manager.gd")
 
 
 func test_character_base_moves_only_for_multiplayer_authority() -> void:
@@ -34,12 +35,10 @@ func test_character_base_moves_only_for_multiplayer_authority() -> void:
 
 
 func test_apply_referee_movement_assigns_inputs_by_peer_id() -> void:
-	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
-	autofree(combat)
+	var referee: Node = autofree(REFEREE_MANAGER_SCRIPT.new())
+	var character_container: Node2D = autofree(Node2D.new())
 
-	var character_container: Node2D = Node2D.new()
-	combat.set("_character_container", character_container)
-	combat.add_child(character_container)
+	referee.set("_character_container", character_container)
 
 	var character_a: CharacterBase = CHARACTER_SCENE.instantiate() as CharacterBase
 	character_a.name = "2"
@@ -51,43 +50,40 @@ func test_apply_referee_movement_assigns_inputs_by_peer_id() -> void:
 	character_b.set_multiplayer_authority(1)
 	character_container.add_child(character_b)
 
-	combat.set("_move_inputs_by_peer_id", {2: Vector2.RIGHT, 3: Vector2.DOWN})
+	referee.set("_move_inputs", {2: Vector2.RIGHT, 3: Vector2.DOWN})
 
-	combat.call("_apply_referee_movement", 0.0)
+	referee.call("simulate_movement", 0.0)
 
 	assert_eq(character_a.get("_move_input"), Vector2.RIGHT)
 	assert_eq(character_b.get("_move_input"), Vector2.DOWN)
 
 
 func test_mark_peer_disconnected_stops_character_and_starts_grace_period() -> void:
-	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
-	autofree(combat)
+	var referee: Node = autofree(REFEREE_MANAGER_SCRIPT.new())
+	var character_container: Node2D = autofree(Node2D.new())
 
-	var character_container: Node2D = Node2D.new()
-	combat.set("_character_container", character_container)
-	combat.add_child(character_container)
+	referee.set("_character_container", character_container)
 
 	var character: CharacterBase = CHARACTER_SCENE.instantiate() as CharacterBase
 	character.name = "2"
 	character.set_move_input(Vector2.RIGHT)
 	character_container.add_child(character)
 
-	combat.set("_move_inputs_by_peer_id", {2: Vector2.RIGHT})
-	combat.call("_mark_peer_disconnected", 2)
+	referee.set("_move_inputs", {2: Vector2.RIGHT})
+	referee.call("on_peer_disconnected", 2)
 
-	var deadlines: Dictionary = combat.get("_disconnect_deadlines_by_peer_id")
-	var inputs: Dictionary = combat.get("_move_inputs_by_peer_id")
+	var deadlines: Dictionary = referee.get("_disconnect_deadlines")
+	var inputs: Dictionary = referee.get("_move_inputs")
 	assert_true(deadlines.has(2), "Disconnect grace period should start for the disconnected peer")
 	assert_false(inputs.has(2), "Disconnected peer input should be cleared immediately")
 	assert_eq(character.get("_move_input"), Vector2.ZERO)
 
 
 func test_broadcast_match_ended_marks_match_as_finished() -> void:
-	var combat: Node2D = TEST_COMBAT_SCRIPT.new()
-	autofree(combat)
+	var session: Node2D = autofree(MATCH_SESSION_SCRIPT.new())
 
-	combat.call("broadcast_match_ended", "disconnect timeout after 10.0 seconds", 2, 3)
+	session.call("broadcast_match_ended", "disconnect timeout after 10.0 seconds", 2, 3)
 
 	assert_true(
-		combat.get("_match_ended"), "Match should be marked as ended after disconnect timeout"
+		session.get("_match_ended"), "Match should be marked as ended after disconnect timeout"
 	)

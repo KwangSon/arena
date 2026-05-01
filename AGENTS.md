@@ -234,10 +234,10 @@ This project uses GUT (Godot Unit Testing) for unit tests.
 
 ```bash
 # Run all unit tests
-godot -d -s --path "$PWD" addons/gut/gut_cmdln.gd
+./godot -d -s --path "$PWD" addons/gut/gut_cmdln.gd
 
 # Run specific test file
-godot -d -s --path "$PWD" addons/gut/gut_cmdln.gd -gtest=test_example.gd
+./godot -d -s --path "$PWD" addons/gut/gut_cmdln.gd -gtest=test_example.gd
 ```
 
 ### Writing Unit Tests
