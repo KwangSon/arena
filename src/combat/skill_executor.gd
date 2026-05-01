@@ -201,7 +201,15 @@ func _on_melee_body_hit(hit_area: HitArea, body: Node2D) -> void:
 	dummy_skill.id = hit_area.skill_id
 	dummy_skill.knockback_power = hit_area.knockback_power
 	var dir: Vector2 = (target.global_position - hit_area.global_position).normalized()
-	_apply_damage(hit_area.attacker_id, int(target.name), target, dummy_skill, null, CardData.Slot.MAIN_WEAPON, dir)
+	_apply_damage(
+		hit_area.attacker_id,
+		int(target.name),
+		target,
+		dummy_skill,
+		null,
+		CardData.Slot.MAIN_WEAPON,
+		dir
+	)
 
 
 func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
@@ -213,7 +221,15 @@ func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
 	dummy_skill.id = projectile.skill_id
 	dummy_skill.knockback_power = projectile.knockback_power
 	var dir: Vector2 = projectile._direction
-	_apply_damage(projectile.attacker_id, int(target.name), target, dummy_skill, null, CardData.Slot.MAIN_WEAPON, dir)
+	_apply_damage(
+		projectile.attacker_id,
+		int(target.name),
+		target,
+		dummy_skill,
+		null,
+		CardData.Slot.MAIN_WEAPON,
+		dir
+	)
 
 
 func _apply_damage(
@@ -232,10 +248,10 @@ func _apply_damage(
 			raw_damage = int(raw_damage * card.damage_mult)
 	var final_damage: int = max(0, int(raw_damage * (1.0 - target.damage_reduction)))
 	target.hp = max(0, target.hp - final_damage)
-	
+
 	if skill.knockback_power > 0.0 and knockback_dir != Vector2.ZERO:
 		target.apply_knockback(knockback_dir * skill.knockback_power)
-		
+
 	hit_occurred.emit(attacker_id, target_id, final_damage, skill.id)
 	if target.hp <= 0:
 		character_died.emit(target_id, _find_first_alive_except(target_id))

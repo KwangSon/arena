@@ -64,7 +64,7 @@ func _setup_ui() -> void:
 	back_btn.offset_top = -68
 	back_btn.offset_right = 180
 	root.add_child(back_btn)
-	var err: int = back_btn.pressed.connect(func() -> void: return_to_lobby_requested.emit())
+	var err: int = back_btn.pressed.connect(return_to_lobby_requested.emit)
 	assert(err == OK, "ShopScreen: failed to connect back button: %d" % err)
 
 	_refresh_gold()
@@ -101,7 +101,7 @@ func _build_card_row(card: CardData) -> Control:
 	var buy_btn := Button.new()
 	buy_btn.custom_minimum_size = Vector2(80, 0)
 	var card_id: String = card.id
-	var err: int = buy_btn.pressed.connect(func() -> void: _on_buy_pressed(card_id))
+	var err: int = buy_btn.pressed.connect(_on_buy_pressed.bind(card_id))
 	assert(err == OK, "ShopScreen: failed to connect buy button: %d" % err)
 	hbox.add_child(buy_btn)
 	_buy_buttons.append(buy_btn)

@@ -70,9 +70,9 @@ func _ready() -> void:
 
 	var err: int = _start_button.pressed.connect(_on_start_pressed)
 	assert(err == OK, "LobbyScreen: failed to connect start button: %d" % err)
-	err = shop_btn.pressed.connect(func() -> void: shop_requested.emit())
+	err = shop_btn.pressed.connect(shop_requested.emit)
 	assert(err == OK, "LobbyScreen: failed to connect shop button: %d" % err)
-	err = deck_btn.pressed.connect(func() -> void: deck_requested.emit())
+	err = deck_btn.pressed.connect(deck_requested.emit)
 	assert(err == OK, "LobbyScreen: failed to connect deck button: %d" % err)
 
 
@@ -93,16 +93,7 @@ func _on_start_pressed() -> void:
 func _send_queue_request() -> void:
 	var http := HTTPRequest.new()
 	add_child(http)
-	var err := http.request_completed.connect(
-		func(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-			http.queue_free()
-			if code != 200:
-				_status_label.text = "서버 연결 실패 (응답: %d)" % code
-				_start_button.disabled = false
-				return
-			_status_label.text = "상대방 대기 중..."
-			_start_poll_timer()
-	)
+	var err := http.request_completed.connect(_on_queue_response.bind(http))
 	assert(err == OK, "LobbyScreen: failed to connect queue http: %d" % err)
 	(
 		http
@@ -127,27 +118,42 @@ func _start_poll_timer() -> void:
 func _poll_status() -> void:
 	var http := HTTPRequest.new()
 	add_child(http)
-	var err := http.request_completed.connect(
-		func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-			http.queue_free()
-			if code == 404:
-				return  # 아직 큐에 있음, 계속 폴링
-			if code != 200:
-				return
-			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
-			if not data is Dictionary:
-				return
-			if data.get("status") == "matched":
-				_poll_timer.stop()
-				_status_label.text = "매치 찾음! 연결 중..."
-				(
-					match_found
-					. emit(
-						str(data.get("referee_host", "localhost")),
-						int(data.get("referee_port", 7800)),
-						str(data.get("match_id", "")),
-					)
-				)
-	)
+	var err := http.request_completed.connect(_on_poll_response.bind(http))
 	assert(err == OK, "LobbyScreen: failed to connect poll http: %d" % err)
 	http.request("%s/queue/%s/status" % [_get_gserver_url(), _player_id])
+
+
+func _on_queue_response(
+	_result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray, http: HTTPRequest
+) -> void:
+	http.queue_free()
+	if code != 200:
+		_status_label.text = "서버 연결 실패 (응답: %d)" % code
+		_start_button.disabled = false
+		return
+	_status_label.text = "상대방 대기 중..."
+	_start_poll_timer()
+
+
+func _on_poll_response(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest
+) -> void:
+	http.queue_free()
+	if code == 404:
+		return
+	if code != 200:
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if not data is Dictionary:
+		return
+	if data.get("status") == "matched":
+		_poll_timer.stop()
+		_status_label.text = "매치 찾음! 연결 중..."
+		(
+			match_found
+			. emit(
+				str(data.get("referee_host", "localhost")),
+				int(data.get("referee_port", 7800)),
+				str(data.get("match_id", "")),
+			)
+		)

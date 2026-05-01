@@ -75,7 +75,7 @@ func _build_card(info: Dictionary) -> Control:
 	btn.text = "선택"
 	btn.custom_minimum_size = Vector2(120, 40)
 	var character_id: String = info["id"]
-	var err: int = btn.pressed.connect(func() -> void: character_chosen.emit(character_id))
+	var err: int = btn.pressed.connect(character_chosen.emit.bind(character_id))
 	assert(err == OK, "CharacterSelectScreen: failed to connect button: %d" % err)
 	vbox.add_child(btn)
 

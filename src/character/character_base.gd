@@ -29,12 +29,12 @@ var team_id: int = 0
 
 var equipped_cards: Dictionary = {}
 var damage_reduction: float = 0.0
+var knockback_velocity: Vector2 = Vector2.ZERO
 
 var _character_data: CharacterData = null
 var _move_input: Vector2 = Vector2.ZERO
 var _move_speed: float = 300.0
 var _anim_state: AnimState = AnimState.IDLE
-var knockback_velocity: Vector2 = Vector2.ZERO
 var _sprite: AnimatedSprite2D
 var _hp_bar: ProgressBar
 var _direction_line: Line2D

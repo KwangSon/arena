@@ -75,7 +75,7 @@ func _setup_ui() -> void:
 	back_btn.offset_top = -68
 	back_btn.offset_right = 180
 	root.add_child(back_btn)
-	var err: int = back_btn.pressed.connect(func() -> void: return_to_lobby_requested.emit())
+	var err: int = back_btn.pressed.connect(return_to_lobby_requested.emit)
 	assert(err == OK, "DeckScreen: failed to connect back button: %d" % err)
 
 
@@ -103,7 +103,7 @@ func _setup_selection_panel(root: Control) -> void:
 	var cancel_btn := Button.new()
 	cancel_btn.text = "취소"
 	panel_vbox.add_child(cancel_btn)
-	var err: int = cancel_btn.pressed.connect(func() -> void: _selection_panel.visible = false)
+	var err: int = cancel_btn.pressed.connect(_on_cancel_pressed)
 	assert(err == OK, "DeckScreen: failed to connect cancel button: %d" % err)
 
 
@@ -129,9 +129,7 @@ func _build_slot_row(slot: CardData.Slot) -> Control:
 	change_btn.text = "변경"
 	change_btn.custom_minimum_size = Vector2(70, 0)
 	var s: int = int(slot)
-	var err: int = change_btn.pressed.connect(
-		func() -> void: _on_change_pressed(s as CardData.Slot)
-	)
+	var err: int = change_btn.pressed.connect(_on_change_pressed.bind(s))
 	assert(err == OK, "DeckScreen: failed to connect change button: %d" % err)
 	hbox.add_child(change_btn)
 
@@ -139,12 +137,16 @@ func _build_slot_row(slot: CardData.Slot) -> Control:
 	unequip_btn.text = "해제"
 	unequip_btn.custom_minimum_size = Vector2(70, 0)
 	_unequip_buttons[int(slot)] = unequip_btn
-	err = unequip_btn.pressed.connect(func() -> void: _on_unequip_pressed(s as CardData.Slot))
+	err = unequip_btn.pressed.connect(_on_unequip_pressed.bind(s))
 	assert(err == OK, "DeckScreen: failed to connect unequip button: %d" % err)
 	hbox.add_child(unequip_btn)
 
 	_refresh_slot(slot)
 	return panel
+
+
+func _on_cancel_pressed() -> void:
+	_selection_panel.visible = false
 
 
 func _on_change_pressed(slot: CardData.Slot) -> void:
@@ -164,7 +166,7 @@ func _on_change_pressed(slot: CardData.Slot) -> void:
 			var btn := Button.new()
 			btn.text = card.display_name
 			var card_id: String = card.id
-			var err: int = btn.pressed.connect(func() -> void: _on_card_selected(slot, card_id))
+			var err: int = btn.pressed.connect(_on_card_selected.bind(slot, card_id))
 			assert(err == OK, "DeckScreen: failed to connect card select: %d" % err)
 			_selection_vbox.add_child(btn)
 
