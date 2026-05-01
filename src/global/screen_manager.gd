@@ -11,6 +11,8 @@ signal game_ready(host: String, port: int, match_id: String, character_id: Strin
 
 enum Screen {
 	NONE,
+	SPLASH,
+	LOGIN,
 	LOBBY,
 	CHARACTER_SELECT,
 	GAME,
@@ -69,6 +71,10 @@ func get_current_screen_node() -> Node:
 func _create_screen(target: Screen) -> Node:
 	var screen: Node = null
 	match target:
+		Screen.SPLASH:
+			screen = _create_splash_screen()
+		Screen.LOGIN:
+			screen = _create_login_screen()
 		Screen.LOBBY:
 			screen = _create_lobby_screen()
 		Screen.CHARACTER_SELECT:
@@ -84,6 +90,18 @@ func _create_screen(target: Screen) -> Node:
 		_:
 			assert(false, "ScreenManager: unknown screen type %d" % target)
 	assert(screen != null, "ScreenManager: failed to create screen %d" % target)
+	return screen
+
+
+func _create_splash_screen() -> Node:
+	var screen: SplashScreen = SplashScreen.new()
+	screen.name = "SplashScreen"
+	return screen
+
+
+func _create_login_screen() -> Node:
+	var screen: LoginScreen = LoginScreen.new()
+	screen.name = "LoginScreen"
 	return screen
 
 
@@ -131,6 +149,14 @@ func _create_deck_screen() -> Node:
 
 func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 	match screen_type:
+		Screen.SPLASH:
+			if screen_node.has_signal("splash_completed"):
+				var err: int = screen_node.splash_completed.connect(_on_splash_completed)
+				assert(err == OK, "ScreenManager: failed to connect splash_completed: %d" % err)
+		Screen.LOGIN:
+			if screen_node.has_signal("login_completed"):
+				var err: int = screen_node.login_completed.connect(_on_login_completed)
+				assert(err == OK, "ScreenManager: failed to connect login_completed: %d" % err)
 		Screen.LOBBY:
 			if screen_node.has_signal("match_found"):
 				var err: int = screen_node.match_found.connect(_on_match_found)
@@ -179,6 +205,14 @@ func _connect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 # ============================================================
 
 
+func _on_splash_completed() -> void:
+	change_screen(Screen.LOGIN)
+
+
+func _on_login_completed() -> void:
+	change_screen(Screen.LOBBY)
+
+
 func _on_match_found(host: String, port: int, match_id: String) -> void:
 	_pending_host = host
 	_pending_port = port
@@ -224,6 +258,14 @@ func _cleanup_current_screen() -> void:
 
 func _disconnect_screen_signals(screen_node: Node, screen_type: Screen) -> void:
 	match screen_type:
+		Screen.SPLASH:
+			if screen_node.has_signal("splash_completed"):
+				if screen_node.splash_completed.is_connected(_on_splash_completed):
+					screen_node.splash_completed.disconnect(_on_splash_completed)
+		Screen.LOGIN:
+			if screen_node.has_signal("login_completed"):
+				if screen_node.login_completed.is_connected(_on_login_completed):
+					screen_node.login_completed.disconnect(_on_login_completed)
 		Screen.LOBBY:
 			if screen_node.has_signal("match_found"):
 				if screen_node.match_found.is_connected(_on_match_found):

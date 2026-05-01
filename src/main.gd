@@ -16,7 +16,7 @@ func _ready() -> void:
 func _start_player() -> void:
 	var err: int = ScreenManager.game_ready.connect(_on_game_ready)
 	assert(err == OK, "Main: failed to connect game_ready: %d" % err)
-	ScreenManager.change_screen(ScreenManager.Screen.LOBBY)
+	ScreenManager.change_screen(ScreenManager.Screen.SPLASH)
 
 
 func _start_referee() -> void:

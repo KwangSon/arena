@@ -49,6 +49,16 @@ func get_owned_cards_for_slot(slot: CardData.Slot) -> Array[CardData]:
 	return result
 
 
+func load_from_nakama(profile: Dictionary, deck: Dictionary) -> void:
+	gold = int(profile.get("gold", STARTING_GOLD))
+	owned_card_ids.clear()
+	for id: Variant in profile.get("owned_card_ids", []):
+		owned_card_ids.append(str(id))
+	_equipped.clear()
+	for slot_str: Variant in deck.get("equipped", {}).keys():
+		_equipped[int(str(slot_str))] = str(deck["equipped"][slot_str])
+
+
 func _find_card(card_id: String) -> CardData:
 	for card: CardData in CardDefinitions.get_all():
 		if card.id == card_id:
