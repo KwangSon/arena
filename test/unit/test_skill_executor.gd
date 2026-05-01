@@ -14,10 +14,10 @@ func _make_executor(character_container: Node2D) -> SkillExecutor:
 	character_container.get_parent().add_child(proj_spawner)
 	var hit_area_container: Node2D = Node2D.new()
 	character_container.get_parent().add_child(hit_area_container)
-	var melee_spawner: MultiplayerSpawner = MultiplayerSpawner.new()
-	character_container.get_parent().add_child(melee_spawner)
-	melee_spawner.spawn_path = hit_area_container.get_path()
-	executor.setup(character_container, proj_spawner, melee_spawner, REFEREE_PEER_ID)
+	var hit_area_spawner: MultiplayerSpawner = MultiplayerSpawner.new()
+	character_container.get_parent().add_child(hit_area_spawner)
+	hit_area_spawner.spawn_path = hit_area_container.get_path()
+	executor.setup(character_container, proj_spawner, hit_area_spawner, REFEREE_PEER_ID)
 	return executor
 
 
@@ -67,6 +67,7 @@ func test_melee_hits_nearby_target() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 
 	assert_eq(target.hp, target.max_hp - skill.damage, "Target should take damage from melee")
 	assert_signal_emitted(executor, "hit_occurred")
@@ -114,8 +115,10 @@ func test_cooldown_blocks_repeated_skill_use() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 	var hp_after_first: int = target.hp
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 
 	assert_eq(target.hp, hp_after_first, "Second use should be blocked by cooldown")
 
@@ -130,9 +133,11 @@ func test_clear_peer_resets_cooldown() -> void:
 
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 	executor.clear_peer(ATTACKER_ID)
 	var hp_before: int = target.hp
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 
 	assert_eq(target.hp, hp_before - skill.damage, "Cooldown should be reset after clear_peer")
 
@@ -183,6 +188,7 @@ func test_character_died_signal_emitted_when_hp_reaches_zero() -> void:
 	var skill: SkillData = _make_melee_skill(100, 200.0)
 	await wait_physics_frames(2)
 	executor.try_execute_skill(attacker, ATTACKER_ID, 0, skill, Vector2.RIGHT)
+	await wait_physics_frames(2)
 
 	assert_signal_emitted(executor, "character_died")
 

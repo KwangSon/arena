@@ -23,7 +23,7 @@ func setup(
 	character_container: Node2D,
 	spawner: MultiplayerSpawner,
 	projectile_spawner: MultiplayerSpawner,
-	melee_hit_spawner: MultiplayerSpawner,
+	hit_area_spawner: MultiplayerSpawner,
 	match_id: String,
 	orchestrator_url: String,
 	referee_port: int,
@@ -31,7 +31,7 @@ func setup(
 	assert(character_container != null, "RefereeManager.setup: character_container is null")
 	assert(spawner != null, "RefereeManager.setup: spawner is null")
 	assert(projectile_spawner != null, "RefereeManager.setup: projectile_spawner is null")
-	assert(melee_hit_spawner != null, "RefereeManager.setup: melee_hit_spawner is null")
+	assert(hit_area_spawner != null, "RefereeManager.setup: hit_area_spawner is null")
 
 	_character_container = character_container
 	_spawner = spawner
@@ -41,7 +41,7 @@ func setup(
 
 	_skill_executor = SkillExecutor.new()
 	_skill_executor.setup(
-		_character_container, projectile_spawner, melee_hit_spawner, REFEREE_PEER_ID
+		_character_container, projectile_spawner, hit_area_spawner, REFEREE_PEER_ID
 	)
 
 	var err: int = _skill_executor.hit_occurred.connect(_on_skill_hit_occurred)

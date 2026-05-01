@@ -4,6 +4,7 @@ signal hit_occurred(attacker_id: int, target_id: int, damage: int, skill_id: Str
 signal character_died(loser_id: int, winner_id: int)
 
 const PROJECTILE_SCENE: PackedScene = preload("res://src/combat/projectile.tscn")
+const HIT_AREA_SCENE: PackedScene = preload("res://src/combat/hit_area.tscn")
 const _TEAM_COLORS: Array[Color] = [
 	Color(0.5, 0.5, 0.5),
 	Color(0.3, 0.5, 1.0),
@@ -12,7 +13,7 @@ const _TEAM_COLORS: Array[Color] = [
 
 var _character_container: Node2D
 var _projectile_spawner: MultiplayerSpawner
-var _melee_hit_spawner: MultiplayerSpawner
+var _hit_area_spawner: MultiplayerSpawner
 var _referee_peer_id: int
 var _skill_last_used: Dictionary = {}
 
@@ -20,18 +21,18 @@ var _skill_last_used: Dictionary = {}
 func setup(
 	character_container: Node2D,
 	projectile_spawner: MultiplayerSpawner,
-	melee_hit_spawner: MultiplayerSpawner,
+	hit_area_spawner: MultiplayerSpawner,
 	referee_peer_id: int
 ) -> void:
 	assert(character_container != null, "SkillExecutor.setup: character_container is null")
 	assert(projectile_spawner != null, "SkillExecutor.setup: projectile_spawner is null")
-	assert(melee_hit_spawner != null, "SkillExecutor.setup: melee_hit_spawner is null")
+	assert(hit_area_spawner != null, "SkillExecutor.setup: hit_area_spawner is null")
 	_character_container = character_container
 	_projectile_spawner = projectile_spawner
-	_melee_hit_spawner = melee_hit_spawner
+	_hit_area_spawner = hit_area_spawner
 	_referee_peer_id = referee_peer_id
 	_projectile_spawner.spawn_function = create_projectile_node
-	_melee_hit_spawner.spawn_function = create_melee_hit_area_node
+	_hit_area_spawner.spawn_function = create_hit_area_node
 
 
 func try_execute_skill(
@@ -72,15 +73,25 @@ func clear_peer(peer_id: int) -> void:
 	_skill_last_used.erase(peer_id)
 
 
-func create_melee_hit_area_node(data: Variant) -> Node:
-	assert(data is Dictionary, "SkillExecutor: melee hit area spawn data must be a Dictionary")
+func create_hit_area_node(data: Variant) -> Node:
+	assert(data is Dictionary, "SkillExecutor: hit area spawn data must be a Dictionary")
 	var d: Dictionary = data
-	var area := MeleeHitArea.new()
+
+	var area := HIT_AREA_SCENE.instantiate() as HitArea
+	assert(area != null, "SkillExecutor: failed to instantiate HitArea scene")
+
 	area.position = d["position"]
+	area.attacker_id = d["attacker_id"]
+	area.damage = d["damage"]
+	area.skill_id = d["skill_id"]
 	area.set_multiplayer_authority(_referee_peer_id)
 	area.setup(
 		d["radius"], Color(d["color_r"], d["color_g"], d["color_b"], 0.35), d["collision_mask"]
 	)
+
+	var err := area.body_hit.connect(_on_melee_body_hit)
+	assert(err == OK, "SkillExecutor: failed to connect melee body_hit: %d" % err)
+
 	return area
 
 
@@ -115,28 +126,14 @@ func _execute_melee(
 	var enemy_layer: int = 2 if attacker.team_id == 1 else 1
 	var team_color: Color = _TEAM_COLORS[clampi(attacker.team_id, 0, _TEAM_COLORS.size() - 1)]
 
-	var circle := CircleShape2D.new()
-	circle.radius = skill.range
-	var query := PhysicsShapeQueryParameters2D.new()
-	query.shape = circle
-	query.transform = Transform2D(0, attacker.global_position)
-	query.collision_mask = enemy_layer
-	query.exclude = [attacker.get_rid()]
-	var hits: Array[Dictionary] = attacker.get_world_2d().direct_space_state.intersect_shape(query)
-	for hit in hits:
-		var target := hit["collider"] as CharacterBase
-		if target == null:
-			continue
-		var dummy := SkillData.new()
-		dummy.damage = effective_damage
-		dummy.id = skill.id
-		_apply_damage(attacker_id, int(target.name), target, dummy)
-
 	(
-		_melee_hit_spawner
+		_hit_area_spawner
 		. spawn(
 			{
 				"position": attacker.global_position,
+				"attacker_id": attacker_id,
+				"damage": effective_damage,
+				"skill_id": skill.id,
 				"radius": skill.range,
 				"collision_mask": enemy_layer,
 				"color_r": team_color.r,
@@ -188,6 +185,16 @@ func _execute_projectile(
 			}
 		)
 	)
+
+
+func _on_melee_body_hit(hit_area: HitArea, body: Node2D) -> void:
+	var target := body as CharacterBase
+	if target == null:
+		return
+	var dummy_skill := SkillData.new()
+	dummy_skill.damage = hit_area.damage
+	dummy_skill.id = hit_area.skill_id
+	_apply_damage(hit_area.attacker_id, int(target.name), target, dummy_skill)
 
 
 func _on_projectile_body_hit(projectile: Projectile, body: Node2D) -> void:
