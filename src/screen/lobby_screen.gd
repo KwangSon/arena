@@ -8,6 +8,7 @@ signal deck_requested
 const POLL_INTERVAL_SEC: float = 2.0
 
 var _player_id: String = ""
+var _game_mode: String = "1v1"
 var _canvas: CanvasLayer
 var _start_button: Button
 var _status_label: Label
@@ -43,10 +44,20 @@ func _ready() -> void:
 	_server_ip_input.custom_minimum_size = Vector2(150, 40)
 	ip_hbox.add_child(_server_ip_input)
 
+	var match_hbox := HBoxContainer.new()
+	match_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	match_hbox.add_theme_constant_override("separation", 16)
+	vbox.add_child(match_hbox)
+
 	_start_button = Button.new()
-	_start_button.text = "매치 시작"
-	_start_button.custom_minimum_size = Vector2(220, 64)
-	vbox.add_child(_start_button)
+	_start_button.text = "1:1 매치"
+	_start_button.custom_minimum_size = Vector2(180, 64)
+	match_hbox.add_child(_start_button)
+
+	var tdm_button := Button.new()
+	tdm_button.text = "3:3 매치"
+	tdm_button.custom_minimum_size = Vector2(180, 64)
+	match_hbox.add_child(tdm_button)
 
 	_status_label = Label.new()
 	_status_label.text = ""
@@ -68,8 +79,14 @@ func _ready() -> void:
 	deck_btn.custom_minimum_size = Vector2(100, 50)
 	nav_hbox.add_child(deck_btn)
 
-	var err: int = _start_button.pressed.connect(_on_start_pressed)
-	assert(err == OK, "LobbyScreen: failed to connect start button: %d" % err)
+	var err: int = _start_button.pressed.connect(
+		_on_match_pressed.bind("1v1")
+	)
+	assert(err == OK, "LobbyScreen: failed to connect 1v1 btn: %d" % err)
+	err = tdm_button.pressed.connect(
+		_on_match_pressed.bind("3v3")
+	)
+	assert(err == OK, "LobbyScreen: failed to connect 3v3 btn: %d" % err)
 	err = shop_btn.pressed.connect(shop_requested.emit)
 	assert(err == OK, "LobbyScreen: failed to connect shop button: %d" % err)
 	err = deck_btn.pressed.connect(deck_requested.emit)
@@ -83,10 +100,11 @@ func _get_gserver_url() -> String:
 	return "http://%s:8080" % ip
 
 
-func _on_start_pressed() -> void:
+func _on_match_pressed(mode: String) -> void:
+	_game_mode = mode
 	_player_id = "p%d" % randi_range(100000, 999999)
 	_start_button.disabled = true
-	_status_label.text = "큐 진입 중..."
+	_status_label.text = "큐 진입 중... (%s)" % mode
 	_send_queue_request()
 
 
@@ -101,7 +119,9 @@ func _send_queue_request() -> void:
 			"%s/queue" % _get_gserver_url(),
 			["Content-Type: application/json"],
 			HTTPClient.METHOD_POST,
-			JSON.stringify({"player_id": _player_id}),
+			JSON.stringify(
+				{"player_id": _player_id, "game_mode": _game_mode}
+			),
 		)
 	)
 

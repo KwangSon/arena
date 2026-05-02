@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b28a0w0isjbrd"]
+
+[ext_resource type="Script" uid="uid://bm5y3s8hvnfdo" path="res://test/manual/test_tdm.gd" id="1_0rxfq"]
+
+[node name="TestTdm" type="Node2D" unique_id=1272331785]
+script = ExtResource("1_0rxfq")

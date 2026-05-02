@@ -85,14 +85,21 @@ class ResultRequest(BaseModel):
 
 class QueueRequest(BaseModel):
     player_id: str
+    game_mode: str = "1v1"
 
 
-# ---------------------------------------------------------------------------
-# Queue state  (2-player matchmaking for local testing without Nakama)
-# ---------------------------------------------------------------------------
+@dataclass
+class QueueBucket:
+    waiting: list[str] = field(default_factory=list)
+    matches: dict[str, dict] = field(default_factory=dict)
+    team_size: int = 1
+    required: int = 2
 
-_queue_waiting: list[str] = []
-_queue_matches: dict[str, dict] = {}
+
+_queues: dict[str, QueueBucket] = {
+    "1v1": QueueBucket(team_size=1, required=2),
+    "3v3": QueueBucket(team_size=3, required=6),
+}
 _queue_lock: asyncio.Lock | None = None
 
 
@@ -103,8 +110,11 @@ def _get_lock() -> asyncio.Lock:
     return _queue_lock
 
 
-async def _allocate_for_players(player_a: str, player_b: str) -> None:
-    """Background task: spawn referee when 2 players are queued."""
+async def _allocate_for_players(
+    player_ids: list[str], game_mode: str
+) -> None:
+    """Background task: spawn referee when enough players are queued."""
+    bucket = _queues[game_mode]
     try:
         match_id = str(uuid.uuid4())
         port = await port_pool.acquire()
@@ -119,12 +129,13 @@ async def _allocate_for_players(player_a: str, player_b: str) -> None:
             f"--match-id={match_id}",
             f"--port={port}",
             f"--orchestrator-url=http://{PUBLIC_HOST}:8080",
+            f"--game-mode={game_mode}",
         )
 
         registry[match_id] = MatchRecord(
             match_id=match_id,
             port=port,
-            player_ids=[player_a, player_b],
+            player_ids=player_ids,
             proc=proc,
         )
 
@@ -144,9 +155,12 @@ async def _allocate_for_players(player_a: str, player_b: str) -> None:
             "referee_host": PUBLIC_HOST,
             "referee_port": port,
         }
-        _queue_matches[player_a] = match_info
-        _queue_matches[player_b] = match_info
-        print(f"[queue] Match {match_id} ready on :{port} for {player_a}, {player_b}")
+        for pid in player_ids:
+            bucket.matches[pid] = match_info
+        print(
+            f"[queue] Match {match_id} ({game_mode}) ready on :{port}"
+            f" for {player_ids}"
+        )
 
     except Exception as e:
         print(f"[queue] Allocation error: {e}")
@@ -172,6 +186,7 @@ async def allocate(req: AllocateRequest) -> AllocateResponse:
         f"--match-id={match_id}",
         f"--port={port}",
         f"--orchestrator-url=http://{PUBLIC_HOST}:8080",
+        f"--game-mode={req.game_mode}",
     )
 
     registry[match_id] = MatchRecord(
@@ -236,30 +251,47 @@ async def get_match(match_id: str) -> dict:
 
 @app.post("/queue")
 async def queue_join(req: QueueRequest) -> dict:
+    if req.game_mode not in _queues:
+        raise HTTPException(400, f"Unknown game_mode: {req.game_mode}")
+    bucket = _queues[req.game_mode]
     lock = _get_lock()
-    player_a = player_b = None
+    batch: list[str] | None = None
 
     async with lock:
-        if req.player_id in _queue_waiting or req.player_id in _queue_matches:
-            return {"status": "already_queued", "player_id": req.player_id}
-        _queue_waiting.append(req.player_id)
-        if len(_queue_waiting) >= 2:
-            player_a = _queue_waiting.pop(0)
-            player_b = _queue_waiting.pop(0)
+        all_ids = (
+            {pid for b in _queues.values() for pid in b.waiting}
+            | {pid for b in _queues.values() for pid in b.matches}
+        )
+        if req.player_id in all_ids:
+            return {
+                "status": "already_queued",
+                "player_id": req.player_id,
+            }
+        bucket.waiting.append(req.player_id)
+        if len(bucket.waiting) >= bucket.required:
+            batch = [
+                bucket.waiting.pop(0) for _ in range(bucket.required)
+            ]
 
-    if player_a is not None:
-        asyncio.create_task(_allocate_for_players(player_a, player_b))
+    if batch is not None:
+        asyncio.create_task(
+            _allocate_for_players(batch, req.game_mode)
+        )
 
-    print(f"[queue] {req.player_id} joined — waiting: {_queue_waiting}")
+    print(
+        f"[queue] {req.player_id} joined {req.game_mode}"
+        f" — waiting: {bucket.waiting}"
+    )
     return {"status": "queued", "player_id": req.player_id}
 
 
 @app.get("/queue/{player_id}/status")
 async def queue_status(player_id: str) -> dict:
-    if player_id in _queue_matches:
-        return _queue_matches.pop(player_id)
-    if player_id in _queue_waiting:
-        return {"status": "waiting"}
+    for bucket in _queues.values():
+        if player_id in bucket.matches:
+            return bucket.matches.pop(player_id)
+        if player_id in bucket.waiting:
+            return {"status": "waiting"}
     raise HTTPException(404, f"Player {player_id} not in queue")
 
 

@@ -14,6 +14,8 @@ var _match_id: String
 var _orchestrator_url: String
 var _referee_port: int
 
+var _team_size: int = 1
+var _team_alive: Dictionary = {}
 var _skill_executor: SkillExecutor
 var _move_inputs: Dictionary = {}
 var _disconnect_deadlines: Dictionary = {}
@@ -27,6 +29,7 @@ func setup(
 	match_id: String,
 	orchestrator_url: String,
 	referee_port: int,
+	team_size: int = 1,
 ) -> void:
 	assert(character_container != null, "RefereeManager.setup: character_container is null")
 	assert(spawner != null, "RefereeManager.setup: spawner is null")
@@ -38,6 +41,7 @@ func setup(
 	_match_id = match_id
 	_orchestrator_url = orchestrator_url
 	_referee_port = referee_port
+	_team_size = team_size
 
 	_skill_executor = SkillExecutor.new()
 	_skill_executor.setup(
@@ -193,9 +197,9 @@ func _spawn_character(
 		if child.name == str(peer_id):
 			return
 	var spawn_count: int = _character_container.get_child_count()
-	var team_id: int = 1 if spawn_count % 2 == 0 else 2
+	var team_id: int = 1 if spawn_count < _team_size else 2
 	if character_id.is_empty():
-		character_id = "knight" if spawn_count % 2 == 0 else "mage"
+		character_id = "knight" if team_id == 1 else "mage"
 	var position: Vector2 = _get_spawn_position(spawn_count, team_id)
 	var spawn_data: Dictionary = {
 		"peer_id": peer_id,
@@ -211,7 +215,13 @@ func _spawn_character(
 		_equip_demo_cards(char_base, character_id)
 	else:
 		_equip_actual_cards(char_base, equipped_card_ids)
-	print("[RefereeManager] Spawned %s for peer %d at %s" % [character_id, peer_id, position])
+	if not _team_alive.has(team_id):
+		_team_alive[team_id] = 0
+	_team_alive[team_id] += 1
+	print(
+		"[RefereeManager] Spawned %s for peer %d team %d at %s (alive: %s)"
+		% [character_id, peer_id, team_id, position, _team_alive]
+	)
 
 
 func _equip_actual_cards(character: CharacterBase, card_ids: Array[String]) -> void:
@@ -240,7 +250,7 @@ func _equip_demo_cards(character: CharacterBase, character_id: String) -> void:
 
 
 func _get_spawn_position(spawn_count: int, team_id: int) -> Vector2:
-	var team_slot: int = spawn_count / 2
+	var team_slot: int = spawn_count if team_id == 1 else spawn_count - _team_size
 	if team_id == 1:
 		match team_slot:
 			0:
@@ -263,11 +273,16 @@ func _handle_disconnect_timeout(peer_id: int, match_ended: bool) -> void:
 		return
 	_disconnect_deadlines.erase(peer_id)
 	_move_inputs.erase(peer_id)
-	var winner_id: int = _find_first_peer_id_except(peer_id)
-	var winner_char: CharacterBase = _find_character_by_peer_id(winner_id)
-	var winner_team: int = winner_char.team_id if winner_char != null else -1
-	match_result_ready.emit(winner_team, peer_id, winner_id)
-	remove_character(peer_id)
+
+	var char: CharacterBase = _find_character_by_peer_id(peer_id)
+	if char != null:
+		var team: int = char.team_id
+		_team_alive[team] = max(0, _team_alive.get(team, 1) - 1)
+		remove_character(peer_id)
+		if _team_alive[team] == 0:
+			var winner_team: int = 2 if team == 1 else 1
+			report_result(winner_team)
+			match_result_ready.emit(winner_team, peer_id, -1)
 
 
 func _find_character_by_peer_id(peer_id: int) -> CharacterBase:
@@ -276,25 +291,28 @@ func _find_character_by_peer_id(peer_id: int) -> CharacterBase:
 			return child as CharacterBase
 	return null
 
-
-func _find_first_peer_id_except(excluded: int) -> int:
-	for child in _character_container.get_children():
-		var character: CharacterBase = child as CharacterBase
-		assert(character != null, "RefereeManager: expected CharacterBase")
-		var peer_id: int = int(character.name)
-		if peer_id != excluded:
-			return peer_id
-	return -1
-
-
 func _on_skill_hit_occurred(
 	attacker_id: int, target_id: int, damage: int, skill_id: String
 ) -> void:
 	hit_occurred.emit(attacker_id, target_id, damage, skill_id)
 
 
-func _on_character_died(loser_id: int, winner_id: int) -> void:
-	var winner_char: CharacterBase = _find_character_by_peer_id(winner_id)
-	var winner_team: int = winner_char.team_id if winner_char != null else -1
-	report_result(winner_team)
-	match_result_ready.emit(winner_team, loser_id, winner_id)
+func _on_character_died(loser_id: int, _winner_hint_id: int) -> void:
+	var loser_char: CharacterBase = _find_character_by_peer_id(loser_id)
+	assert(
+		loser_char != null,
+		"RefereeManager._on_character_died: loser not found for id %d" % loser_id
+	)
+	var loser_team: int = loser_char.team_id
+	assert(
+		_team_alive.has(loser_team),
+		"RefereeManager._on_character_died: unknown team %d" % loser_team
+	)
+
+	_team_alive[loser_team] = max(0, _team_alive[loser_team] - 1)
+	remove_character(loser_id)
+
+	if _team_alive[loser_team] == 0:
+		var winner_team: int = 2 if loser_team == 1 else 1
+		report_result(winner_team)
+		match_result_ready.emit(winner_team, loser_id, -1)

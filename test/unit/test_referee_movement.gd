@@ -82,7 +82,7 @@ func test_mark_peer_disconnected_stops_character_and_starts_grace_period() -> vo
 func test_broadcast_match_ended_marks_match_as_finished() -> void:
 	var session: Node2D = autofree(MATCH_SESSION_SCRIPT.new())
 
-	session.call("broadcast_match_ended", "disconnect timeout after 10.0 seconds", 2, 3)
+	session.call("broadcast_match_ended", "disconnect timeout after 10.0 seconds", 1)
 
 	assert_true(
 		session.get("_match_ended"), "Match should be marked as ended after disconnect timeout"

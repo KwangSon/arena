@@ -155,6 +155,8 @@ func _execute_aoe(
 		assert(target != null, "SkillExecutor: expected CharacterBase under CharacterContainer")
 		if target == attacker:
 			continue
+		if target.team_id == attacker.team_id:
+			continue
 		var dist: float = attacker.global_position.distance_to(target.global_position)
 		if dist <= skill.range:
 			var dir: Vector2 = (target.global_position - attacker.global_position).normalized()

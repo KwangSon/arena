@@ -1,7 +1,7 @@
 ## 매치 세션. referee와 client 모두 이 노드를 같은 경로에 추가해 RPC 경로를 일치시킨다.
 class_name MatchSession extends Node2D
 
-signal match_completed(reason: String, loser_id: int, winner_id: int)
+signal match_completed(reason: String, winner_team: int)
 
 const PLAYER_HUD_SCENE: PackedScene = preload("res://src/ui/player_hud.tscn")
 const MAP_SCENE: PackedScene = preload("res://src/map/map_01.tscn")
@@ -17,6 +17,8 @@ var _referee_port: int = 7777
 var _match_id: String = ""
 var _orchestrator_url: String = ""
 var _character_id: String = ""
+var _team_size: int = 1
+var _local_team_id: int = -1
 
 var _match_ended: bool = false
 
@@ -72,6 +74,9 @@ func _parse_referee_args() -> void:
 			_match_id = arg.split("=")[1]
 		elif arg.begins_with("--orchestrator-url="):
 			_orchestrator_url = arg.split("=")[1]
+		elif arg.begins_with("--game-mode="):
+			var mode_str: String = arg.split("=")[1]
+			_team_size = 3 if mode_str == "3v3" else 1
 	assert(_referee_port > 0, "MatchSession: referee requires --port=<number>")
 
 
@@ -82,6 +87,8 @@ func _process(_delta: float) -> void:
 		_local_character = _find_local_character()
 		if _local_character != null:
 			_local_character.show_facing_indicator()
+	if _local_character != null and _local_team_id == -1:
+		_local_team_id = _local_character.team_id
 	if _local_character == null:
 		return
 	_camera.global_position = _local_character.global_position
@@ -182,6 +189,7 @@ func _setup_referee() -> void:
 			_match_id,
 			_orchestrator_url,
 			_referee_port,
+			_team_size,
 		)
 	)
 	var err: int = _referee_manager.hit_occurred.connect(_on_hit_occurred)
@@ -309,17 +317,12 @@ func broadcast_hit_result(attacker_id: int, target_id: int, damage: int, skill_i
 
 
 @rpc("authority", "call_local", "reliable")
-func broadcast_match_ended(reason: String, loser_id: int, winner_id: int) -> void:
+func broadcast_match_ended(reason: String, winner_team: int) -> void:
 	_match_ended = true
-	var msg := "Match over: %s" % reason
-	if loser_id > 0:
-		msg += "  loser=%d" % loser_id
-	if winner_id > 0:
-		msg += "  winner=%d" % winner_id
-	print("[MatchSession] %s" % msg)
-	_add_log(-1, msg)
+	print("[MatchSession] Match over: %s, winner_team=%d" % [reason, winner_team])
+	_add_log(-1, "Match over: %s (winner_team=%d)" % [reason, winner_team])
 	if not _is_server:
-		match_completed.emit(reason, loser_id, winner_id)
+		match_completed.emit(reason, winner_team)
 
 
 # ============================================================
@@ -331,10 +334,14 @@ func _on_hit_occurred(attacker_id: int, target_id: int, damage: int, skill_id: S
 	broadcast_hit_result.rpc(attacker_id, target_id, damage, skill_id)
 
 
-func _on_referee_match_result(_winner_team: int, loser_id: int, winner_id: int) -> void:
+func _on_referee_match_result(winner_team: int, _loser_id: int, _winner_id: int) -> void:
 	if _match_ended:
 		return
-	broadcast_match_ended.rpc("player eliminated", loser_id, winner_id)
+	broadcast_match_ended.rpc("player eliminated", winner_team)
+
+
+func get_local_team_id() -> int:
+	return _local_team_id
 
 
 func _on_dash_requested() -> void:

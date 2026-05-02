@@ -38,12 +38,13 @@ func _on_game_ready(host: String, port: int, match_id: String, character_id: Str
 
 
 func _on_match_completed(
-	reason: String, loser_id: int, winner_id: int, session: MatchSession
+	reason: String, winner_team: int, session: MatchSession
 ) -> void:
-	var local_id: int = multiplayer.get_unique_id()
-	var won: bool = winner_id == local_id
+	var local_team: int = session.get_local_team_id()
+	assert(local_team != -1, "Main._on_match_completed: local_team_id was never cached")
+	var won: bool = local_team == winner_team
 	session.queue_free()
 	ScreenManager.change_screen(
 		ScreenManager.Screen.RESULT,
-		{"won": won, "winner_id": winner_id, "loser_id": loser_id, "reason": reason}
+		{"won": won, "reason": reason}
 	)
