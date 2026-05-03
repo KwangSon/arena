@@ -259,7 +259,7 @@ func test_aoe_skill_applies_weapon_damage_mult() -> void:
 	var executor: SkillExecutor = _make_executor(root)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
+	var target: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
 	attacker.equip_card(CardDefinitions.get_main_weapon())
 
 	var skill: SkillData = _make_aoe_skill(50, 300.0)
@@ -275,9 +275,9 @@ func test_aoe_skill_hits_multiple_targets_in_range() -> void:
 	var executor: SkillExecutor = _make_executor(root)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target_near1: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
-	var target_near2: CharacterBase = _spawn_character(root, TARGET_ID + 1, Vector2(0.0, 100.0))
-	var target_far: CharacterBase = _spawn_character(root, TARGET_ID + 2, Vector2(1000.0, 0.0))
+	var target_near1: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
+	var target_near2: CharacterBase = _spawn_character(root, TARGET_ID + 1, Vector2(0.0, 100.0), 2)
+	var target_far: CharacterBase = _spawn_character(root, TARGET_ID + 2, Vector2(1000.0, 0.0), 2)
 
 	var skill: SkillData = _make_aoe_skill(30, 200.0)
 	await wait_physics_frames(2)

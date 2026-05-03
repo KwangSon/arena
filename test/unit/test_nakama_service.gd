@@ -4,7 +4,9 @@ var _service: Node
 
 
 func before_each() -> void:
-	_service = add_child_autofree(NakamaService.new())
+	_service = NakamaService
+	_service.user_id = ""
+	_service.token = ""
 
 
 # ============================================================
@@ -13,7 +15,10 @@ func before_each() -> void:
 
 
 func test_mock_mode_when_ip_empty() -> void:
+	var old_ip: String = ProjectSettings.get_setting("network/nakama/ip", "")
+	ProjectSettings.set_setting("network/nakama/ip", "")
 	assert_true(_service.is_mock_mode(), "ip가 비어있으면 mock mode여야 함")
+	ProjectSettings.set_setting("network/nakama/ip", old_ip)
 
 
 func test_device_id_is_non_empty() -> void:

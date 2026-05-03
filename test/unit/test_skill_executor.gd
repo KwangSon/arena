@@ -94,8 +94,8 @@ func test_aoe_hits_all_targets_in_range() -> void:
 	var executor: SkillExecutor = _make_executor(root)
 
 	var attacker: CharacterBase = _spawn_character(root, ATTACKER_ID, Vector2.ZERO)
-	var target_a: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0))
-	var target_b: CharacterBase = _spawn_character(root, 4, Vector2(-100.0, 0.0))
+	var target_a: CharacterBase = _spawn_character(root, TARGET_ID, Vector2(100.0, 0.0), 2)
+	var target_b: CharacterBase = _spawn_character(root, 4, Vector2(-100.0, 0.0), 2)
 	var skill: SkillData = _make_aoe_skill(10, 500.0)
 
 	await wait_physics_frames(2)
