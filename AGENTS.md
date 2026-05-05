@@ -19,14 +19,6 @@ This project follows an **AI-First Code Strategy** where GDScript takes priority
   - Create and store data instances in GDScript code
   - This approach enables faster iteration and better version control
 
-## Technology Stack
-
-- **Engine**: Godot 4.6
-- **Rendering**: Mobile renderer
-- **Platform Target**: Mobile
-- **Testing**: GUT (Godot Unit Testing)
-- **Linting/Formatting**: GDScript Toolkit
-
 ## Project Structure
 
 > See @docs/ARCHITECTURE.md for detailed architecture documentation.
